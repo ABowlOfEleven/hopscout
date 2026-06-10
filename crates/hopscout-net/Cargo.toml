@@ -1,0 +1,27 @@
+[package]
+name = "hopscout-net"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "hopscout's Win32 FFI boundary: ICMP (rung 1) today, raw sockets + Npcap later"
+
+# NOTE: this crate deliberately does NOT inherit the workspace `unsafe_code =
+# forbid` lint. It is the single sanctioned FFI boundary; all unsafe lives here
+# behind a safe API, each block carrying a `// SAFETY:` justification.
+
+[dependencies]
+hopscout-core = { version = "0.1.0", path = "../hopscout-core" }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_System_IO",                   # gates IcmpSendEcho2 (APC/event variant)
+] }
+
+# Used only by the headless `trace` example to exercise enrichment end-to-end.
+[dev-dependencies]
+hopscout-enrich = { version = "0.1.0", path = "../hopscout-enrich" }

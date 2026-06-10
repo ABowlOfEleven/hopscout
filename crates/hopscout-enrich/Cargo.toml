@@ -1,0 +1,16 @@
+[package]
+name = "hopscout-enrich"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Background hop enrichment for hopscout: reverse DNS + origin ASN (Team Cymru)"
+
+[dependencies]
+hopscout-core = { version = "0.1.0", path = "../hopscout-core" }
+dns-lookup = "2.0"
+
+[lints]
+workspace = true

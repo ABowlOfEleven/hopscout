@@ -1,0 +1,22 @@
+[package]
+name = "hopscout-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "hopscout terminal UI — a live MTR-style trace table (ratatui)"
+
+[[bin]]
+name = "hopscout"
+path = "src/main.rs"
+
+[dependencies]
+hopscout-core = { version = "0.1.0", path = "../hopscout-core" }
+hopscout-net = { version = "0.1.0", path = "../hopscout-net" }
+hopscout-enrich = { version = "0.1.0", path = "../hopscout-enrich" }
+ratatui = "0.30.1"
+
+[lints]
+workspace = true

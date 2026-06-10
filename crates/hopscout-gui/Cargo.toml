@@ -1,0 +1,25 @@
+[package]
+name = "hopscout-gui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "hopscout desktop GUI — live trace table + per-hop sparklines (egui)"
+
+# Friendly binary name for the installed app / Start-menu entry.
+[[bin]]
+name = "HopScout"
+path = "src/main.rs"
+
+[dependencies]
+hopscout-core = { version = "0.1.0", path = "../hopscout-core" }
+hopscout-net = { version = "0.1.0", path = "../hopscout-net" }
+hopscout-enrich = { version = "0.1.0", path = "../hopscout-enrich" }
+eframe = "0.34.3"
+egui = "0.34.3"
+egui_extras = "0.34.3"
+
+[lints]
+workspace = true
