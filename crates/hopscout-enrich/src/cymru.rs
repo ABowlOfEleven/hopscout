@@ -39,8 +39,7 @@ pub fn lookup(addrs: &[IpAddr]) -> HashMap<IpAddr, Origin> {
 }
 
 fn query(addrs: &[IpAddr]) -> std::io::Result<HashMap<IpAddr, Origin>> {
-    let v4: Vec<&IpAddr> = addrs.iter().filter(|a| a.is_ipv4()).collect();
-    if v4.is_empty() {
+    if addrs.is_empty() {
         return Ok(HashMap::new());
     }
 
@@ -48,8 +47,9 @@ fn query(addrs: &[IpAddr]) -> std::io::Result<HashMap<IpAddr, Origin>> {
     stream.set_read_timeout(Some(IO_TIMEOUT))?;
     stream.set_write_timeout(Some(IO_TIMEOUT))?;
 
+    // Cymru's bulk format accepts IPv4 and IPv6 addresses interchangeably.
     let mut block = String::from("begin\nverbose\n");
-    for a in &v4 {
+    for a in addrs {
         block.push_str(&a.to_string());
         block.push('\n');
     }

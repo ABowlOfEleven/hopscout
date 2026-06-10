@@ -19,7 +19,8 @@ hopscout-core = { version = "0.1.0", path = "../hopscout-core" }
 windows = { version = "0.62.2", features = [
     "Win32_Foundation",
     "Win32_NetworkManagement_IpHelper",
-    "Win32_System_IO",                   # gates IcmpSendEcho2 (APC/event variant)
+    "Win32_System_IO",                   # gates Icmp[6]SendEcho2 (APC/event variant)
+    "Win32_Networking_WinSock",          # SOCKADDR_IN6 / IN6_ADDR / AF_INET6 for IPv6
 ] }
 
 # Used only by the headless `trace` example to exercise enrichment end-to-end.

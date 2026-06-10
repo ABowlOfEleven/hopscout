@@ -16,12 +16,20 @@ use hopscout_core::{Engine, EngineConfig};
 use hopscout_net::IcmpBackendFactory;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind};
 
+#[derive(Clone, Copy, PartialEq)]
+enum Family {
+    Auto,
+    V4,
+    V6,
+}
+
 struct Args {
     target: String,
     interval: Duration,
     timeout: Duration,
     max_hops: u8,
     size: usize,
+    family: Family,
 }
 
 fn main() -> io::Result<()> {
@@ -35,7 +43,7 @@ fn main() -> io::Result<()> {
         }
     };
 
-    let Some(dest) = resolve(&args.target) else {
+    let Some(dest) = resolve(&args.target, args.family) else {
         eprintln!("hopscout: could not resolve an IPv4 address for '{}'", args.target);
         std::process::exit(1);
     };
@@ -92,6 +100,7 @@ fn parse_args() -> Result<Option<Args>, String> {
     let mut max_hops = 30u8;
     let mut size = 32usize;
 
+    let mut family = Family::Auto;
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
         match arg.as_str() {
@@ -99,6 +108,8 @@ fn parse_args() -> Result<Option<Args>, String> {
                 usage();
                 return Ok(None);
             }
+            "-4" => family = Family::V4,
+            "-6" => family = Family::V6,
             "-i" | "--interval" => interval = next_num(&mut it, "interval")?,
             "-w" | "--timeout" => timeout = next_num(&mut it, "timeout")?,
             "-m" | "--max-hops" => max_hops = next_num(&mut it, "max-hops")?,
@@ -124,6 +135,7 @@ fn parse_args() -> Result<Option<Args>, String> {
         timeout: Duration::from_millis(timeout),
         max_hops,
         size,
+        family,
     }))
 }
 
@@ -147,20 +159,30 @@ fn usage() {
          \x20   -w, --timeout  <ms>   per-probe timeout             [default: 1000]\n\
          \x20   -m, --max-hops <n>    maximum TTL to probe          [default: 30]\n\
          \x20   -s, --size     <n>    payload bytes                 [default: 32]\n\
+         \x20   -4 / -6               force IPv4 / IPv6             [default: auto]\n\
          \x20   -h, --help            show this help\n\
          \n\
          KEYS:\n    q/Esc quit   p/space pause   r reset"
     );
 }
 
-/// Resolve a host or literal to its first IPv4 address.
-fn resolve(target: &str) -> Option<IpAddr> {
-    if let Ok(ip @ IpAddr::V4(_)) = target.parse::<IpAddr>() {
-        return Some(ip);
+/// Resolve a host or literal to an address, honoring the family preference
+/// (`Auto` prefers IPv4 then falls back to IPv6).
+fn resolve(target: &str, family: Family) -> Option<IpAddr> {
+    let matches = |a: &IpAddr| match family {
+        Family::Auto => true,
+        Family::V4 => a.is_ipv4(),
+        Family::V6 => a.is_ipv6(),
+    };
+    if let Ok(ip) = target.parse::<IpAddr>() {
+        return matches(&ip).then_some(ip);
     }
-    (target, 0u16)
+    let mut addrs: Vec<IpAddr> = (target, 0u16)
         .to_socket_addrs()
         .ok()?
-        .find(|s| s.is_ipv4())
         .map(|s| s.ip())
+        .filter(matches)
+        .collect();
+    addrs.sort_by_key(|a| a.is_ipv6()); // Auto prefers IPv4
+    addrs.into_iter().next()
 }

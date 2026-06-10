@@ -65,12 +65,10 @@ fn main() -> std::io::Result<()> {
 }
 
 fn resolve(target: &str) -> Option<IpAddr> {
-    if let Ok(ip @ IpAddr::V4(_)) = target.parse::<IpAddr>() {
+    if let Ok(ip) = target.parse::<IpAddr>() {
         return Some(ip);
     }
-    (target, 0u16)
-        .to_socket_addrs()
-        .ok()?
-        .find(|s| s.is_ipv4())
-        .map(|s| s.ip())
+    let mut addrs: Vec<IpAddr> = (target, 0u16).to_socket_addrs().ok()?.map(|s| s.ip()).collect();
+    addrs.sort_by_key(|a| a.is_ipv6()); // prefer IPv4, fall back to IPv6
+    addrs.into_iter().next()
 }
