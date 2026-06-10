@@ -9,13 +9,14 @@ use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
 
-use hopscout_core::{Engine, EngineConfig};
-use hopscout_net::IcmpBackendFactory;
+use hopscout_core::{BackendFactory, Engine, EngineConfig, ProbeProtocol};
+use hopscout_net::{IcmpBackendFactory, RawUdpBackendFactory};
 
 fn main() -> std::io::Result<()> {
     let mut args = std::env::args().skip(1);
     let target = args.next().unwrap_or_else(|| "8.8.8.8".to_string());
     let secs: u64 = args.next().and_then(|s| s.parse().ok()).unwrap_or(4);
+    let proto = args.next().unwrap_or_default();
 
     let Some(dest) = resolve(&target) else {
         eprintln!("could not resolve an IPv4 address for '{target}'");
@@ -26,7 +27,20 @@ fn main() -> std::io::Result<()> {
 
     let mut config = EngineConfig::new(dest);
     config.interval = Duration::from_millis(500);
-    let engine = Engine::start(config, Arc::new(IcmpBackendFactory))?;
+
+    let factory: Arc<dyn BackendFactory> = if proto.eq_ignore_ascii_case("udp") {
+        config.protocol = ProbeProtocol::Udp;
+        let IpAddr::V4(d4) = dest else {
+            eprintln!("UDP mode is IPv4-only");
+            std::process::exit(1);
+        };
+        let local = hopscout_net::local_ipv4_for(d4)?;
+        println!("(rung-2 UDP mode, bind {local})\n");
+        Arc::new(RawUdpBackendFactory::new(local)?)
+    } else {
+        Arc::new(IcmpBackendFactory)
+    };
+    let engine = Engine::start(config, factory)?;
     let enricher = hopscout_enrich::spawn(engine.session());
 
     sleep(Duration::from_secs(secs));

@@ -1786,6 +1786,7 @@ version = "0.1.0"
 dependencies = [
  "hopscout-core",
  "hopscout-enrich",
+ "socket2",
  "windows",
 ]
 

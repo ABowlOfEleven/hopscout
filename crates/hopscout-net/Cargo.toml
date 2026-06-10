@@ -16,11 +16,16 @@ description = "hopscout's Win32 FFI boundary: ICMP (rung 1) today, raw sockets +
 hopscout-core = { version = "0.1.0", path = "../hopscout-core" }
 
 [target.'cfg(windows)'.dependencies]
+socket2 = { version = "0.6", features = ["all"] } # `all` gates Type::RAW etc.
 windows = { version = "0.62.2", features = [
     "Win32_Foundation",
     "Win32_NetworkManagement_IpHelper",
     "Win32_System_IO",                   # gates Icmp[6]SendEcho2 (APC/event variant)
     "Win32_Networking_WinSock",          # SOCKADDR_IN6 / IN6_ADDR / AF_INET6 for IPv6
+    "Win32_Security",                    # TOKEN_ELEVATION (rung-2 capability check)
+    "Win32_System_Threading",            # OpenProcessToken / GetCurrentProcess
+    "Win32_UI_Shell",                    # ShellExecuteW (runas) for self-elevation
+    "Win32_UI_WindowsAndMessaging",      # SW_NORMAL show command
 ] }
 
 # Used only by the headless `trace` example to exercise enrichment end-to-end.

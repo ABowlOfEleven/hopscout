@@ -12,8 +12,10 @@ use std::net::{IpAddr, ToSocketAddrs};
 use std::sync::Arc;
 use std::time::Duration;
 
-use hopscout_core::{Engine, EngineConfig};
-use hopscout_net::IcmpBackendFactory;
+use hopscout_core::{BackendFactory, Engine, EngineConfig, ProbeProtocol};
+use hopscout_net::{
+    IcmpBackendFactory, RawUdpBackendFactory, detect_caps, local_ipv4_for, relaunch_elevated,
+};
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind};
 
 #[derive(Clone, Copy, PartialEq)]
@@ -23,6 +25,12 @@ enum Family {
     V6,
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum Proto {
+    Icmp,
+    Udp,
+}
+
 struct Args {
     target: String,
     interval: Duration,
@@ -30,6 +38,7 @@ struct Args {
     max_hops: u8,
     size: usize,
     family: Family,
+    proto: Proto,
 }
 
 fn main() -> io::Result<()> {
@@ -53,8 +62,16 @@ fn main() -> io::Result<()> {
     config.timeout = args.timeout;
     config.max_hops = args.max_hops;
     config.payload_size = args.size;
+    config.protocol = match args.proto {
+        Proto::Icmp => ProbeProtocol::Icmp,
+        Proto::Udp => ProbeProtocol::Udp,
+    };
 
-    let engine = Engine::start(config.clone(), Arc::new(IcmpBackendFactory))?;
+    let Some(factory) = build_factory(args.proto, dest) else {
+        return Ok(()); // relaunched elevated, or fatal already reported
+    };
+
+    let engine = Engine::start(config.clone(), factory)?;
     // Background rDNS + ASN enrichment fills hostnames/AS info as hops appear.
     let enricher = hopscout_enrich::spawn(engine.session());
 
@@ -101,6 +118,7 @@ fn parse_args() -> Result<Option<Args>, String> {
     let mut size = 32usize;
 
     let mut family = Family::Auto;
+    let mut proto = Proto::Icmp;
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
         match arg.as_str() {
@@ -110,6 +128,14 @@ fn parse_args() -> Result<Option<Args>, String> {
             }
             "-4" => family = Family::V4,
             "-6" => family = Family::V6,
+            "-p" | "--proto" => {
+                let v = it.next().ok_or("--proto needs a value (icmp|udp)")?;
+                proto = match v.to_ascii_lowercase().as_str() {
+                    "icmp" => Proto::Icmp,
+                    "udp" => Proto::Udp,
+                    other => return Err(format!("unknown proto '{other}' (icmp|udp)")),
+                };
+            }
             "-i" | "--interval" => interval = next_num(&mut it, "interval")?,
             "-w" | "--timeout" => timeout = next_num(&mut it, "timeout")?,
             "-m" | "--max-hops" => max_hops = next_num(&mut it, "max-hops")?,
@@ -136,6 +162,7 @@ fn parse_args() -> Result<Option<Args>, String> {
         max_hops,
         size,
         family,
+        proto,
     }))
 }
 
@@ -160,10 +187,46 @@ fn usage() {
          \x20   -m, --max-hops <n>    maximum TTL to probe          [default: 30]\n\
          \x20   -s, --size     <n>    payload bytes                 [default: 32]\n\
          \x20   -4 / -6               force IPv4 / IPv6             [default: auto]\n\
+         \x20   -p, --proto <p>       icmp | udp (udp needs admin) [default: icmp]\n\
          \x20   -h, --help            show this help\n\
          \n\
          KEYS:\n    q/Esc quit   p/space pause   r reset"
     );
+}
+
+/// Pick the probe backend for the chosen protocol. Returns `None` if we handed
+/// off to an elevated relaunch (caller should exit cleanly).
+fn build_factory(proto: Proto, dest: IpAddr) -> Option<Arc<dyn BackendFactory>> {
+    match proto {
+        Proto::Icmp => Some(Arc::new(IcmpBackendFactory)),
+        Proto::Udp => {
+            let IpAddr::V4(d4) = dest else {
+                eprintln!("hopscout: UDP mode is IPv4-only");
+                std::process::exit(1);
+            };
+            if !detect_caps().rung2() {
+                eprintln!("hopscout: UDP mode (rung 2) needs admin — relaunching elevated…");
+                match relaunch_elevated() {
+                    Ok(()) => return None,
+                    Err(e) => {
+                        eprintln!("hopscout: elevation failed: {e}");
+                        std::process::exit(1);
+                    }
+                }
+            }
+            let local = local_ipv4_for(d4).unwrap_or_else(|e| {
+                eprintln!("hopscout: could not find local interface: {e}");
+                std::process::exit(1);
+            });
+            match RawUdpBackendFactory::new(local) {
+                Ok(f) => Some(Arc::new(f)),
+                Err(e) => {
+                    eprintln!("hopscout: raw socket failed: {e}");
+                    std::process::exit(1);
+                }
+            }
+        }
+    }
 }
 
 /// Resolve a host or literal to an address, honoring the family preference
