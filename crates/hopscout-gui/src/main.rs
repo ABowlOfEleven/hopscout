@@ -1,8 +1,8 @@
 //! hopscout GUI — an egui front-end over the same engine the CLI uses.
 //!
-//! Enter a target, Start, and watch the live hop table (loss/RTT/jitter, with
-//! reverse-DNS and ASN filled in by the background enricher). Click a hop to see
-//! its recent-RTT sparkline.
+//! Multi-target: add several destinations and monitor them side by side. The
+//! left panel lists them with a live summary; the selected one drives the
+//! Table / Map / Topology views.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -14,7 +14,7 @@ mod topo;
 use std::net::{IpAddr, ToSocketAddrs};
 use std::time::Duration;
 
-use hopscout_core::{Engine, EngineConfig, ProbeProtocol, brand};
+use hopscout_core::{Engine, EngineConfig, ProbeProtocol, Session, brand};
 use hopscout_enrich::EnricherHandle;
 use hopscout_net::{BackendError, make_factory, relaunch_elevated};
 
@@ -22,7 +22,7 @@ fn main() -> eframe::Result<()> {
     let arg_target = std::env::args().nth(1);
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([900.0, 600.0])
+            .with_inner_size([1000.0, 640.0])
             .with_title(brand::name_version())
             .with_app_id("hopscout"),
         ..Default::default()
@@ -34,15 +34,16 @@ fn main() -> eframe::Result<()> {
     )
 }
 
-/// A live trace: the engine, its enricher, and display state.
-struct Running {
+/// One monitored target: its engine, enricher, and per-target UI state.
+struct Monitor {
     engine: Engine,
     _enricher: EnricherHandle,
     label: String,
     config: EngineConfig,
+    selected: Option<usize>,
 }
 
-impl Running {
+impl Monitor {
     fn stop(self) {
         // Drop order: stop the enricher, then join the engine workers.
         self._enricher.stop();
@@ -64,8 +65,8 @@ struct HopscoutApp {
     proto: ProbeProtocol,
     port: u16,
     view: View,
-    running: Option<Running>,
-    selected: Option<usize>,
+    monitors: Vec<Monitor>,
+    active: Option<usize>,
     error: Option<String>,
     needs_elevation: bool,
     show_about: bool,
@@ -80,19 +81,20 @@ impl HopscoutApp {
             proto: ProbeProtocol::Icmp,
             port: 443,
             view: View::Table,
-            running: None,
-            selected: None,
+            monitors: Vec::new(),
+            active: None,
             error: None,
             needs_elevation: false,
             show_about: false,
         };
         if arg_target.is_some() {
-            app.start();
+            app.add_target();
         }
         app
     }
 
-    fn start(&mut self) {
+    /// Build a monitor for the current target field + settings and select it.
+    fn add_target(&mut self) {
         self.error = None;
         self.needs_elevation = false;
         let Some(dest) = resolve(self.target_input.trim()) else {
@@ -124,78 +126,85 @@ impl HopscoutApp {
         match Engine::start(config.clone(), factory) {
             Ok(engine) => {
                 let enricher = hopscout_enrich::spawn(engine.session());
-                self.selected = None;
-                self.running = Some(Running {
+                self.monitors.push(Monitor {
                     engine,
                     _enricher: enricher,
                     label: self.target_input.trim().to_string(),
                     config,
+                    selected: None,
                 });
+                self.active = Some(self.monitors.len() - 1);
             }
             Err(e) => self.error = Some(format!("failed to start engine: {e}")),
         }
     }
 
-    fn stop(&mut self) {
-        if let Some(run) = self.running.take() {
-            run.stop();
+    fn remove(&mut self, idx: usize) {
+        if idx >= self.monitors.len() {
+            return;
         }
+        self.monitors.remove(idx).stop();
+        self.active = if self.monitors.is_empty() {
+            None
+        } else {
+            Some(self.active.unwrap_or(0).min(self.monitors.len() - 1))
+        };
     }
 }
 
 impl eframe::App for HopscoutApp {
-    // This eframe builds the root viewport into a `Ui`; panels nest via
-    // `show_inside`, and the context comes from `ui.ctx()`.
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        // Keep the live view ticking even without input events.
-        if self.running.is_some() {
+        if !self.monitors.is_empty() {
             ui.ctx().request_repaint_after(Duration::from_millis(150));
         }
 
+        self.top_bar(ui);
+        self.monitor_list(ui);
+        self.main_view(ui);
+        self.about_window(ui);
+    }
+}
+
+impl HopscoutApp {
+    fn top_bar(&mut self, ui: &mut egui::Ui) {
         egui::Panel::top("controls").show_inside(ui, |ui| {
             ui.add_space(4.0);
             ui.horizontal(|ui| {
                 ui.label("Target:");
-                let enter = ui
-                    .text_edit_singleline(&mut self.target_input)
-                    .lost_focus()
+                let enter = ui.text_edit_singleline(&mut self.target_input).lost_focus()
                     && ui.input(|i| i.key_pressed(egui::Key::Enter));
 
-                let running = self.running.is_some();
-                ui.add_enabled_ui(!running, |ui| {
-                    ui.label("proto");
-                    egui::ComboBox::from_id_salt("proto")
-                        .selected_text(proto_label(self.proto))
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut self.proto, ProbeProtocol::Icmp, "ICMP");
-                            ui.selectable_value(&mut self.proto, ProbeProtocol::Udp, "UDP");
-                            ui.selectable_value(&mut self.proto, ProbeProtocol::TcpSyn, "TCP");
-                        });
-                    if self.proto == ProbeProtocol::TcpSyn {
-                        ui.label("port");
-                        ui.add(egui::DragValue::new(&mut self.port).range(1..=65535));
-                    }
-                    ui.label("interval");
-                    ui.add(egui::DragValue::new(&mut self.interval_ms).suffix(" ms").range(1..=60_000));
-                    ui.label("hops");
-                    ui.add(egui::DragValue::new(&mut self.max_hops).range(1..=64));
-                });
+                ui.label("proto");
+                egui::ComboBox::from_id_salt("proto")
+                    .selected_text(proto_label(self.proto))
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.proto, ProbeProtocol::Icmp, "ICMP");
+                        ui.selectable_value(&mut self.proto, ProbeProtocol::Udp, "UDP");
+                        ui.selectable_value(&mut self.proto, ProbeProtocol::TcpSyn, "TCP");
+                    });
+                if self.proto == ProbeProtocol::TcpSyn {
+                    ui.label("port");
+                    ui.add(egui::DragValue::new(&mut self.port).range(1..=65535));
+                }
+                ui.label("interval");
+                ui.add(egui::DragValue::new(&mut self.interval_ms).suffix(" ms").range(1..=60_000));
+                ui.label("hops");
+                ui.add(egui::DragValue::new(&mut self.max_hops).range(1..=64));
 
-                if running {
-                    if ui.button("Stop").clicked() {
-                        self.stop();
+                if ui.button("Add target").clicked() || enter {
+                    self.add_target();
+                }
+
+                // Per-active controls.
+                if let Some(active) = self.active {
+                    let mon = &self.monitors[active];
+                    let paused = mon.engine.is_paused();
+                    if ui.button(if paused { "Resume" } else { "Pause" }).clicked() {
+                        mon.engine.toggle_pause();
                     }
-                    if let Some(run) = &self.running {
-                        let paused = run.engine.is_paused();
-                        if ui.button(if paused { "Resume" } else { "Pause" }).clicked() {
-                            run.engine.toggle_pause();
-                        }
-                        if ui.button("Reset").clicked() {
-                            run.engine.reset();
-                        }
+                    if ui.button("Reset").clicked() {
+                        mon.engine.reset();
                     }
-                } else if ui.button("Start").clicked() || enter {
-                    self.start();
                 }
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -211,7 +220,49 @@ impl eframe::App for HopscoutApp {
             });
             ui.add_space(4.0);
         });
+    }
 
+    fn monitor_list(&mut self, ui: &mut egui::Ui) {
+        if self.monitors.is_empty() {
+            return;
+        }
+        let mut select: Option<usize> = None;
+        let mut remove: Option<usize> = None;
+        egui::Panel::left("monitors")
+            .resizable(true)
+            .default_size(190.0)
+            .show_inside(ui, |ui| {
+                ui.add_space(4.0);
+                ui.strong("Targets");
+                ui.separator();
+                for (i, mon) in self.monitors.iter().enumerate() {
+                    let s = mon.engine.snapshot();
+                    let (hops, worst, dest_avg) = summary(&s);
+                    let selected = self.active == Some(i);
+                    ui.horizontal(|ui| {
+                        if ui.selectable_label(selected, &mon.label).clicked() {
+                            select = Some(i);
+                        }
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.small_button("✕").clicked() {
+                                remove = Some(i);
+                            }
+                        });
+                    });
+                    let avg = dest_avg.map(|v| format!("{v:.0}ms")).unwrap_or_else(|| "—".into());
+                    ui.weak(format!("{hops} hops · loss {worst:.0}% · {avg}"));
+                    ui.add_space(4.0);
+                }
+            });
+        if let Some(i) = select {
+            self.active = Some(i);
+        }
+        if let Some(i) = remove {
+            self.remove(i);
+        }
+    }
+
+    fn main_view(&mut self, ui: &mut egui::Ui) {
         egui::CentralPanel::default().show_inside(ui, |ui| {
             if let Some(err) = self.error.clone() {
                 ui.colored_label(egui::Color32::from_rgb(220, 80, 80), &err);
@@ -222,19 +273,21 @@ impl eframe::App for HopscoutApp {
                 ui.separator();
             }
 
-            let Some(run) = &self.running else {
+            let Some(active) = self.active else {
                 ui.add_space(20.0);
                 ui.vertical_centered(|ui| {
                     ui.heading("hopscout");
-                    ui.label("Enter a target host and press Start.");
+                    ui.label("Enter a target host and press Add target.");
                 });
                 return;
             };
 
-            let snapshot = run.engine.snapshot();
+            let snapshot = self.monitors[active].engine.snapshot();
+            let label = self.monitors[active].label.clone();
+            let target = self.monitors[active].config.target;
             ui.horizontal(|ui| {
-                ui.strong(&run.label);
-                ui.label(format!("({})", run.config.target));
+                ui.strong(label);
+                ui.label(format!("({target})"));
                 match snapshot.path_len {
                     Some(p) => ui.label(format!("· destination at hop {p}")),
                     None => ui.label("· discovering path…"),
@@ -242,38 +295,53 @@ impl eframe::App for HopscoutApp {
             });
             ui.separator();
 
+            let selected = &mut self.monitors[active].selected;
             match self.view {
                 View::Table => {
-                    table::show(ui, &snapshot, &mut self.selected);
+                    table::show(ui, &snapshot, selected);
                     ui.separator();
-                    sparkline::panel(ui, &snapshot, self.selected);
+                    sparkline::panel(ui, &snapshot, *selected);
                 }
                 View::Map => map::show(ui, &snapshot),
                 View::Topology => topo::show(ui, &snapshot),
             }
         });
-
-        if self.show_about {
-            let ctx = ui.ctx().clone();
-            egui::Window::new("About")
-                .collapsible(false)
-                .resizable(false)
-                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-                .show(&ctx, |ui| {
-                    ui.heading(brand::DISPLAY_NAME);
-                    ui.label(brand::name_version());
-                    ui.label(brand::TAGLINE);
-                    ui.add_space(6.0);
-                    ui.hyperlink(brand::REPOSITORY);
-                    ui.add_space(6.0);
-                    ui.label("Rung-1 ICMP needs no admin; UDP (rung 2) needs elevation.");
-                    ui.add_space(8.0);
-                    if ui.button("Close").clicked() {
-                        self.show_about = false;
-                    }
-                });
-        }
     }
+
+    fn about_window(&mut self, ui: &mut egui::Ui) {
+        if !self.show_about {
+            return;
+        }
+        let ctx = ui.ctx().clone();
+        egui::Window::new("About")
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(&ctx, |ui| {
+                ui.heading(brand::DISPLAY_NAME);
+                ui.label(brand::name_version());
+                ui.label(brand::TAGLINE);
+                ui.add_space(6.0);
+                ui.hyperlink(brand::REPOSITORY);
+                ui.add_space(6.0);
+                ui.label("Rung-1 ICMP needs no admin; UDP/TCP need elevation.");
+                ui.add_space(8.0);
+                if ui.button("Close").clicked() {
+                    self.show_about = false;
+                }
+            });
+    }
+}
+
+/// (visible hop count, worst hop loss %, destination avg RTT) for the sidebar.
+fn summary(s: &Session) -> (usize, f64, Option<f64>) {
+    let n = s.visible_hops();
+    let mut worst = 0.0_f64;
+    for i in 0..n {
+        worst = worst.max(s.hops[i].stat.loss_pct());
+    }
+    let dest_avg = if n > 0 { s.hops[n - 1].stat.avg_ms() } else { None };
+    (n, worst, dest_avg)
 }
 
 fn proto_label(p: ProbeProtocol) -> &'static str {
