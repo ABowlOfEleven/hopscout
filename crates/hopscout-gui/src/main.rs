@@ -32,6 +32,7 @@ fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1000.0, 640.0])
+            .with_min_inner_size([680.0, 420.0])
             .with_title(brand::name_version())
             .with_app_id("hopscout"),
         ..Default::default()
@@ -216,35 +217,39 @@ impl HopscoutApp {
     fn top_bar(&mut self, ui: &mut egui::Ui) {
         egui::Panel::top("controls").show_inside(ui, |ui| {
             ui.add_space(4.0);
-            ui.horizontal(|ui| {
-                ui.label("Target:");
-                let enter = ui.text_edit_singleline(&mut self.target_input).lost_focus()
-                    && ui.input(|i| i.key_pressed(egui::Key::Enter));
 
-                ui.label("proto");
+            // Controls wrap onto extra rows on narrow windows instead of clipping.
+            ui.horizontal_wrapped(|ui| {
+                ui.label("Target");
+                let edit = ui.add(
+                    egui::TextEdit::singleline(&mut self.target_input)
+                        .desired_width(150.0)
+                        .hint_text("host or IP"),
+                );
+                let enter = edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+
                 egui::ComboBox::from_id_salt("proto")
                     .selected_text(proto_label(self.proto))
                     .show_ui(ui, |ui| {
                         ui.selectable_value(&mut self.proto, ProbeProtocol::Icmp, "ICMP");
-                        ui.selectable_value(&mut self.proto, ProbeProtocol::Udp, "UDP");
-                        ui.selectable_value(&mut self.proto, ProbeProtocol::TcpSyn, "TCP");
-                    });
+                        ui.selectable_value(&mut self.proto, ProbeProtocol::Udp, "UDP (admin)");
+                        ui.selectable_value(&mut self.proto, ProbeProtocol::TcpSyn, "TCP (Npcap)");
+                    })
+                    .response
+                    .on_hover_text("ICMP needs no admin; UDP/TCP elevate on demand");
                 if self.proto == ProbeProtocol::TcpSyn {
-                    ui.label("port");
-                    ui.add(egui::DragValue::new(&mut self.port).range(1..=65535));
+                    ui.add(egui::DragValue::new(&mut self.port).prefix("port ").range(1..=65535));
                 }
-                ui.label("interval");
-                ui.add(egui::DragValue::new(&mut self.interval_ms).suffix(" ms").range(1..=60_000));
-                ui.label("hops");
-                ui.add(egui::DragValue::new(&mut self.max_hops).range(1..=64));
-                ui.label("flows");
-                ui.add(egui::DragValue::new(&mut self.flows).range(1..=8));
+                ui.add(egui::DragValue::new(&mut self.interval_ms).suffix(" ms").range(1..=60_000))
+                    .on_hover_text("interval between probes");
+                ui.add(egui::DragValue::new(&mut self.max_hops).prefix("hops ").range(1..=64))
+                    .on_hover_text("max TTL");
+                ui.add(egui::DragValue::new(&mut self.flows).prefix("flows ").range(1..=8))
+                    .on_hover_text("concurrent flows for multipath discovery");
 
                 if ui.button("Add target").clicked() || enter {
                     self.add_target();
                 }
-
-                // Per-active controls.
                 if let Some(active) = self.active {
                     let mon = &self.monitors[active];
                     let paused = mon.engine.is_paused();
@@ -255,34 +260,37 @@ impl HopscoutApp {
                         mon.engine.reset();
                     }
                 }
-
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("About").clicked() {
-                        self.show_about = true;
-                    }
-                    if ui.button("⟳").on_hover_text("Reload custom themes").clicked() {
-                        let keep = self.themes.get(self.theme_idx).map(|t| t.name.clone());
-                        self.themes = theme::all();
-                        self.theme_idx = keep
-                            .and_then(|n| self.themes.iter().position(|t| t.name == n))
-                            .unwrap_or(0);
-                        self.applied_idx = None;
-                    }
-                    let cur = self.themes.get(self.theme_idx).map(|t| t.name.as_str()).unwrap_or("Theme");
-                    egui::ComboBox::from_id_salt("theme")
-                        .selected_text(cur)
-                        .show_ui(ui, |ui| {
-                            for (i, t) in self.themes.iter().enumerate() {
-                                ui.selectable_value(&mut self.theme_idx, i, &t.name);
-                            }
-                        });
-                });
             });
-            ui.horizontal(|ui| {
+
+            ui.add_space(2.0);
+
+            // View tabs on the left, theme + About on the right (wraps if narrow).
+            ui.horizontal_wrapped(|ui| {
                 ui.selectable_value(&mut self.view, View::Table, "Table");
                 ui.selectable_value(&mut self.view, View::Map, "Map");
                 ui.selectable_value(&mut self.view, View::Topology, "Topology");
                 ui.selectable_value(&mut self.view, View::Alerts, "Alerts");
+
+                ui.separator();
+                let cur = self.themes.get(self.theme_idx).map(|t| t.name.as_str()).unwrap_or("Theme");
+                egui::ComboBox::from_id_salt("theme")
+                    .selected_text(cur)
+                    .show_ui(ui, |ui| {
+                        for (i, t) in self.themes.iter().enumerate() {
+                            ui.selectable_value(&mut self.theme_idx, i, &t.name);
+                        }
+                    });
+                if ui.button("⟳").on_hover_text("Reload custom themes from disk").clicked() {
+                    let keep = self.themes.get(self.theme_idx).map(|t| t.name.clone());
+                    self.themes = theme::all();
+                    self.theme_idx = keep
+                        .and_then(|n| self.themes.iter().position(|t| t.name == n))
+                        .unwrap_or(0);
+                    self.applied_idx = None;
+                }
+                if ui.button("About").clicked() {
+                    self.show_about = true;
+                }
             });
             ui.add_space(4.0);
         });
@@ -306,11 +314,16 @@ impl HopscoutApp {
                     let (hops, worst, dest_avg) = summary(&s);
                     let selected = self.active == Some(i);
                     ui.horizontal(|ui| {
-                        if ui.selectable_label(selected, &mon.label).clicked() {
+                        let short = truncate_label(&mon.label, 18);
+                        if ui
+                            .selectable_label(selected, short)
+                            .on_hover_text(&mon.label)
+                            .clicked()
+                        {
                             select = Some(i);
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.small_button("✕").clicked() {
+                            if ui.small_button("✕").on_hover_text("Remove").clicked() {
                                 remove = Some(i);
                             }
                         });
@@ -353,7 +366,7 @@ impl HopscoutApp {
             let label = self.monitors[active].label.clone();
             let target = self.monitors[active].config.target;
             let mtu_text = mtu_label(&self.monitors[active].mtu);
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 ui.strong(label);
                 ui.label(format!("({target})"));
                 match snapshot.path_len {
@@ -393,9 +406,11 @@ impl HopscoutApp {
                             if devs.is_empty() {
                                 ui.colored_label(theme.good, "✓ path matches baseline");
                             } else {
-                                for d in &devs {
-                                    ui.colored_label(alert_color(d, &theme), d.message());
-                                }
+                                egui::ScrollArea::vertical().show(ui, |ui| {
+                                    for d in &devs {
+                                        ui.colored_label(alert_color(d, &theme), d.message());
+                                    }
+                                });
                             }
                         }
                     }
@@ -448,6 +463,14 @@ fn alert_color(a: &Alert, theme: &Theme) -> egui::Color32 {
         Alert::LatencyRegression { .. } | Alert::LossOnset { .. } => {
             theme.bad // degradation
         }
+    }
+}
+
+fn truncate_label(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        s.to_string()
+    } else {
+        s.chars().take(max.saturating_sub(1)).collect::<String>() + "…"
     }
 }
 
