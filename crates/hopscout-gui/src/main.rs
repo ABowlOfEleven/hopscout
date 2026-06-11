@@ -14,11 +14,16 @@ mod theme;
 mod topo;
 
 use std::net::{IpAddr, ToSocketAddrs};
+use std::sync::{Arc, Mutex};
+use std::thread;
 use std::time::Duration;
 
 use hopscout_core::{Alert, Baseline, Engine, EngineConfig, ProbeProtocol, Session, brand};
 use hopscout_enrich::EnricherHandle;
-use hopscout_net::{BackendError, make_factory, relaunch_elevated};
+use hopscout_net::{BackendError, make_factory, path_mtu, relaunch_elevated};
+
+/// MTU probe result: None = still probing, Some(None) = no answer, Some(Some) = bytes.
+type MtuSlot = Arc<Mutex<Option<Option<u16>>>>;
 
 use theme::Theme;
 
@@ -46,6 +51,7 @@ struct Monitor {
     config: EngineConfig,
     selected: Option<usize>,
     baseline: Option<Baseline>,
+    mtu: MtuSlot,
 }
 
 impl Monitor {
@@ -141,6 +147,19 @@ impl HopscoutApp {
         match Engine::start(config.clone(), factory) {
             Ok(engine) => {
                 let enricher = hopscout_enrich::spawn(engine.session());
+
+                // Probe the path MTU in the background.
+                let mtu: MtuSlot = Arc::new(Mutex::new(None));
+                if let IpAddr::V4(v4) = dest {
+                    let slot = Arc::clone(&mtu);
+                    thread::spawn(move || {
+                        let r = path_mtu(v4, Duration::from_millis(800)).ok().flatten();
+                        *slot.lock().unwrap() = Some(r);
+                    });
+                } else {
+                    *mtu.lock().unwrap() = Some(None);
+                }
+
                 self.monitors.push(Monitor {
                     engine,
                     _enricher: enricher,
@@ -148,6 +167,7 @@ impl HopscoutApp {
                     config,
                     selected: None,
                     baseline: None,
+                    mtu,
                 });
                 self.active = Some(self.monitors.len() - 1);
             }
@@ -330,6 +350,7 @@ impl HopscoutApp {
             let snapshot = self.monitors[active].engine.snapshot();
             let label = self.monitors[active].label.clone();
             let target = self.monitors[active].config.target;
+            let mtu_text = mtu_label(&self.monitors[active].mtu);
             ui.horizontal(|ui| {
                 ui.strong(label);
                 ui.label(format!("({target})"));
@@ -337,6 +358,7 @@ impl HopscoutApp {
                     Some(p) => ui.label(format!("· destination at hop {p}")),
                     None => ui.label("· discovering path…"),
                 };
+                ui.label(format!("· {mtu_text}"));
             });
             ui.separator();
 
@@ -424,6 +446,14 @@ fn alert_color(a: &Alert, theme: &Theme) -> egui::Color32 {
         Alert::LatencyRegression { .. } | Alert::LossOnset { .. } => {
             theme.bad // degradation
         }
+    }
+}
+
+fn mtu_label(slot: &MtuSlot) -> String {
+    match *slot.lock().unwrap() {
+        None => "MTU probing…".to_string(),
+        Some(None) => "MTU n/a".to_string(),
+        Some(Some(m)) => format!("MTU {m}"),
     }
 }
 

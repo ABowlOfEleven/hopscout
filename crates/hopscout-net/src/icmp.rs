@@ -199,6 +199,88 @@ impl ProbeBackend for IcmpBackend {
     }
 }
 
+/// Discover the path MTU to an IPv4 destination by binary-searching the largest
+/// DF-set ICMP echo payload that gets through. Returns the MTU in bytes (payload
+/// + 28 for the IPv4 + ICMP headers), or `None` if the host doesn't answer ping.
+///
+/// Oversized DF probes fail fast (the local stack or a bottleneck router reports
+/// "packet too big"), so the search converges quickly except on black-hole paths.
+pub fn path_mtu(dest: Ipv4Addr, timeout: Duration) -> io::Result<Option<u16>> {
+    const DF: u8 = 0x02; // IP "don't fragment" flag
+    const HEADERS: u16 = 28; // 20 (IPv4) + 8 (ICMP)
+
+    // SAFETY: standard ICMP handle, closed before returning.
+    let handle = unsafe { IcmpCreateFile() }
+        .map_err(|e| io::Error::other(format!("IcmpCreateFile failed: {e}")))?;
+    let dest_addr = u32::from_ne_bytes(dest.octets());
+    let timeout_ms = clamp_timeout(timeout).min(800); // keep the search snappy
+
+    let echo = |payload: u16| -> bool {
+        let buf = vec![0x68u8; payload as usize];
+        let opts = IP_OPTION_INFORMATION {
+            Ttl: 64,
+            Tos: 0,
+            Flags: DF,
+            OptionsSize: 0,
+            OptionsData: std::ptr::null_mut(),
+        };
+        let reply_size = size_of::<ICMP_ECHO_REPLY>() + payload as usize + 8 + 16;
+        let mut reply = vec![0u8; reply_size];
+        for _ in 0..2 {
+            // SAFETY: live buffers of the declared sizes; synchronous call.
+            let n = unsafe {
+                IcmpSendEcho2(
+                    handle,
+                    None,
+                    None,
+                    None,
+                    dest_addr,
+                    buf.as_ptr() as *const c_void,
+                    payload,
+                    Some(&opts),
+                    reply.as_mut_ptr() as *mut c_void,
+                    reply_size as u32,
+                    timeout_ms,
+                )
+            };
+            if n != 0 {
+                // SAFETY: at least one reply was written.
+                let r: ICMP_ECHO_REPLY =
+                    unsafe { std::ptr::read_unaligned(reply.as_ptr() as *const ICMP_ECHO_REPLY) };
+                if r.Status == IP_SUCCESS {
+                    return true;
+                }
+            }
+        }
+        false
+    };
+
+    let result = if !echo(0) {
+        None // host doesn't answer ping at all
+    } else {
+        let (mut lo, mut hi) = (0u16, 9000u16 - HEADERS); // search up to jumbo frames
+        let mut best = 0u16;
+        while lo <= hi {
+            let mid = lo + (hi - lo) / 2;
+            if echo(mid) {
+                best = mid;
+                lo = mid + 1;
+            } else if mid == 0 {
+                break;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        Some(best + HEADERS)
+    };
+
+    // SAFETY: handle came from IcmpCreateFile and is closed once.
+    unsafe {
+        let _ = IcmpCloseHandle(handle);
+    }
+    Ok(result)
+}
+
 /// Hands the engine a fresh [`IcmpBackend`] (its own handles) per hop.
 pub struct IcmpBackendFactory;
 

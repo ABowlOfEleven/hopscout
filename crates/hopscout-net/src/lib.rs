@@ -38,7 +38,7 @@ pub use factory::{BackendError, make_factory};
 #[cfg(windows)]
 pub use ipc::{HelperBackend, HelperBackendFactory, PIPE_NAME, serve as serve_helper};
 #[cfg(windows)]
-pub use icmp::{IcmpBackend, IcmpBackendFactory};
+pub use icmp::{IcmpBackend, IcmpBackendFactory, path_mtu};
 #[cfg(windows)]
 pub use npcap::Npcap;
 #[cfg(windows)]
