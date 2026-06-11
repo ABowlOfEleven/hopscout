@@ -1,6 +1,6 @@
 # Contributing to hopscout
 
-## Clean-room — important
+## Clean-room - important
 
 `mtr` and `WinMTR` are **GPL-2.0**. hopscout is MIT and a clean reimplementation.
 Do **not** copy, paste, or transcribe code from `mtr`, `WinMTR`, or any other
