@@ -8,9 +8,12 @@ repository.workspace = true
 rust-version.workspace = true
 description = "hopscout desktop GUI — live trace table + per-hop sparklines (egui)"
 
-# Friendly binary name for the installed app / Start-menu entry.
+# GUI binary. NB: must NOT case-collide with the CLI's `hopscout.exe` -- Windows
+# paths are case-insensitive, so `HopScout.exe` and `hopscout.exe` would clobber
+# each other in target/ and in the install dir. The Start Menu label is still
+# "hopscout" (set in the installer), independent of this file name.
 [[bin]]
-name = "HopScout"
+name = "hopscout-gui"
 path = "src/main.rs"
 
 [package.metadata.wix]

@@ -22,7 +22,7 @@ alerting, multi-target dashboards, and multipath (Paris) discovery.
   [Releases](https://github.com/ABowlOfEleven/hopscout/releases). Per-user (no
   admin to install); adds `hopscout` to your PATH and a Start Menu entry for the GUI.
 - **Portable:** `hopscout-<version>-x64-portable.zip` contains all three exes
-  (`hopscout.exe`, `HopScout.exe`, `hopscout-helper.exe`); unzip and run.
+  (`hopscout.exe`, `hopscout-gui.exe`, `hopscout-helper.exe`); unzip and run.
 - **winget:** `winget install ABowlOfEleven.hopscout` (once the manifest is published).
 - **From source:** Rust 1.85+ on Windows, then `cargo build --release` and
   `cargo run -p hopscout-cli -- 8.8.8.8`.

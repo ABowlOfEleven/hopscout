@@ -10,7 +10,7 @@ fn main() {
 fn embed_resources() {
     let mut res = winresource::WindowsResource::new();
     res.set("ProductName", "hopscout");
-    res.set("FileDescription", "HopScout — desktop traceroute monitor");
+    res.set("FileDescription", "hopscout GUI - desktop traceroute monitor");
     res.set("CompanyName", "hopscout contributors");
     res.set("LegalCopyright", "MIT-licensed; (c) hopscout contributors");
 

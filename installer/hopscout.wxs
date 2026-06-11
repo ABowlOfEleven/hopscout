@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- hopscout MSI (WiX v5). Per-user install, no admin needed to install.
-     Installs the CLI (hopscout.exe), GUI (HopScout.exe), and the elevated probe
+     Installs the CLI (hopscout.exe), GUI (hopscout-gui.exe), and the elevated probe
      helper (hopscout-helper.exe), adds the install dir to the user PATH so the
      `hopscout` CLI works in a terminal, and adds a Start Menu shortcut for the GUI.
      Build from the repo root:
@@ -31,10 +31,10 @@
     <StandardDirectory Id="ProgramMenuFolder" />
 
     <Feature Id="Main" Title="hopscout" Level="1">
-      <!-- The GUI. Explicit GUIDs: auto ("*") collides because HopScout.exe and
-           hopscout.exe differ only by case (paths are case-insensitive). -->
+      <!-- The GUI (named hopscout-gui.exe so it doesn't case-collide with the
+           CLI's hopscout.exe). -->
       <Component Id="GuiExe" Directory="INSTALLFOLDER" Guid="7A1E9C20-1F44-4B6A-9E11-A1B2C3D40001">
-        <File Id="HopScoutExe" Source="target/release/HopScout.exe" KeyPath="yes" />
+        <File Id="HopscoutGuiExe" Source="target/release/hopscout-gui.exe" KeyPath="yes" />
       </Component>
       <!-- The MTR-compatible CLI. -->
       <Component Id="CliExe" Directory="INSTALLFOLDER" Guid="7A1E9C20-1F44-4B6A-9E11-A1B2C3D40002">
@@ -58,7 +58,7 @@
         <Shortcut Id="AppShortcut"
                   Name="hopscout"
                   Description="Live traceroute and network monitor (MTR-compatible)"
-                  Target="[INSTALLFOLDER]HopScout.exe"
+                  Target="[INSTALLFOLDER]hopscout-gui.exe"
                   WorkingDirectory="INSTALLFOLDER"
                   Icon="HopscoutIcon" />
         <RegistryValue Root="HKCU" Key="Software\hopscout" Name="installed"

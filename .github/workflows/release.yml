@@ -2,7 +2,7 @@ name: Release
 
 # On a v* tag (or the "Run workflow" button): verify on Windows and, if it
 # passes, build the artifacts and publish a single GitHub Release:
-#   * portable .zip (hopscout.exe + HopScout.exe + hopscout-helper.exe)
+#   * portable .zip (hopscout.exe + hopscout-gui.exe + hopscout-helper.exe)
 #   * MSI installer (WiX v5)
 # hopscout is Windows-only, so there is no Linux/macOS artifact.
 on:
@@ -91,7 +91,7 @@ jobs:
           $stage = "hopscout-$V-x64"
           New-Item -ItemType Directory -Force $stage | Out-Null
           Copy-Item target/release/hopscout.exe        $stage/
-          Copy-Item target/release/HopScout.exe        $stage/
+          Copy-Item target/release/hopscout-gui.exe    $stage/
           Copy-Item target/release/hopscout-helper.exe $stage/
           Copy-Item README.md, LICENSE                 $stage/
           Compress-Archive -Path "$stage/*" -DestinationPath "dist/$stage-portable.zip" -Force
