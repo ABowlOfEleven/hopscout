@@ -16,6 +16,6 @@ UpgradeBehavior: install
 Installers:
   - Architecture: x64
     InstallerUrl: https://github.com/ABowlOfEleven/hopscout/releases/download/v0.1.0/hopscout-0.1.0-x64.msi
-    InstallerSha256: 0000000000000000000000000000000000000000000000000000000000000000
+    InstallerSha256: 00813AAFF36F07DF5315FB25DDE0D4A0601458AA1D42564B9BA8E77BF780810B
 ManifestType: installer
 ManifestVersion: 1.6.0
