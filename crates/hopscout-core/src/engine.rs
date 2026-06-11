@@ -33,6 +33,8 @@ pub struct EngineConfig {
     pub timeout: Duration,
     pub payload_size: usize,
     pub protocol: ProbeProtocol,
+    /// First TTL to probe (MTR's `--first-ttl`); hops below it are skipped.
+    pub first_ttl: u8,
     /// Number of concurrent probe flows. `1` is a plain trace; higher values
     /// spread probes across flow tuples to discover ECMP multipath (one worker
     /// set per flow, so cost is `flows × max_hops` threads).
@@ -48,6 +50,7 @@ impl EngineConfig {
             timeout: Duration::from_secs(1),
             payload_size: 32,
             protocol: ProbeProtocol::Icmp,
+            first_ttl: 1,
             flows: 1,
         }
     }
@@ -77,9 +80,10 @@ impl Engine {
         let path_len = Arc::new(AtomicU8::new(config.max_hops));
 
         let flows = config.flows.max(1);
+        let first = config.first_ttl.max(1);
         let mut workers = Vec::with_capacity(config.max_hops as usize * flows as usize);
         for flow in 0..flows as u16 {
-            for ttl in 1..=config.max_hops {
+            for ttl in first..=config.max_hops {
                 let backend = factory.create()?;
                 let ctx = WorkerCtx {
                     flow,

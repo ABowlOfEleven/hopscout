@@ -43,18 +43,24 @@ impl Drop for EnricherHandle {
     }
 }
 
-/// Spawn the enrichment loop against a live session.
+/// Spawn the enrichment loop against a live session (with reverse DNS).
 pub fn spawn(session: Arc<Mutex<Session>>) -> EnricherHandle {
+    spawn_with(session, true)
+}
+
+/// Spawn enrichment, choosing whether to do reverse DNS (`dns = false` mirrors
+/// MTR's `--no-dns`). ASN + geolocation always run.
+pub fn spawn_with(session: Arc<Mutex<Session>>, dns: bool) -> EnricherHandle {
     let stop = Arc::new(AtomicBool::new(false));
     let thread_stop = Arc::clone(&stop);
     let join = thread::Builder::new()
         .name("hopscout-enrich".to_string())
-        .spawn(move || run(session, thread_stop))
+        .spawn(move || run(session, thread_stop, dns))
         .ok();
     EnricherHandle { stop, join }
 }
 
-fn run(session: Arc<Mutex<Session>>, stop: Arc<AtomicBool>) {
+fn run(session: Arc<Mutex<Session>>, stop: Arc<AtomicBool>, dns: bool) {
     // Addresses we've already resolved (or tried), so we never re-query.
     let mut done: HashSet<IpAddr> = HashSet::new();
 
@@ -84,8 +90,10 @@ fn run(session: Arc<Mutex<Session>>, stop: Arc<AtomicBool>) {
             if stop.load(Ordering::Relaxed) {
                 return;
             }
-            if let Ok(name) = dns_lookup::lookup_addr(addr) {
-                apply_hostname(&session, *addr, name);
+            if dns {
+                if let Ok(name) = dns_lookup::lookup_addr(addr) {
+                    apply_hostname(&session, *addr, name);
+                }
             }
             done.insert(*addr);
         }

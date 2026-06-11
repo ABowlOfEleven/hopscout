@@ -24,7 +24,7 @@ pub fn draw(
     .split(frame.area());
 
     frame.render_widget(title_line(engine, target_label, config), chunks[0]);
-    frame.render_widget(hop_table(session), chunks[1]);
+    frame.render_widget(hop_table(session, config.first_ttl), chunks[1]);
     frame.render_widget(footer_line(session, has_baseline, alerts), chunks[2]);
 }
 
@@ -48,13 +48,14 @@ fn title_line<'a>(engine: &Engine, target_label: &'a str, config: &EngineConfig)
     Paragraph::new(line)
 }
 
-fn hop_table(session: &Session) -> Table<'static> {
+fn hop_table(session: &Session, first_ttl: u8) -> Table<'static> {
     let header = Row::new([
         "Hop", "Host", "ASN", "Loss%", "Snt", "Last", "Avg", "Best", "Wrst", "Jttr", "p95",
     ])
     .style(Style::default().add_modifier(Modifier::BOLD));
 
-    let rows: Vec<Row> = (0..session.visible_hops())
+    let start = (first_ttl as usize).saturating_sub(1);
+    let rows: Vec<Row> = (start..session.visible_hops())
         .map(|i| {
             let ttl = i + 1;
             let hop = &session.hops[i];
