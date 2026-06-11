@@ -13,6 +13,8 @@ mod caps;
 #[cfg(windows)]
 mod elevate;
 #[cfg(windows)]
+mod factory;
+#[cfg(windows)]
 mod icmp;
 #[cfg(windows)]
 mod iface;
@@ -29,6 +31,8 @@ mod tcp;
 pub use caps::detect as detect_caps;
 #[cfg(windows)]
 pub use elevate::relaunch_elevated;
+#[cfg(windows)]
+pub use factory::{BackendError, make_factory};
 #[cfg(windows)]
 pub use icmp::{IcmpBackend, IcmpBackendFactory};
 #[cfg(windows)]

@@ -13,10 +13,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use hopscout_core::{BackendFactory, Engine, EngineConfig, ProbeProtocol};
-use hopscout_net::{
-    IcmpBackendFactory, NpcapTcpBackendFactory, RawUdpBackendFactory, detect_caps, local_ipv4_for,
-    relaunch_elevated,
-};
+use hopscout_net::{BackendError, make_factory, relaunch_elevated};
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind};
 
 #[derive(Clone, Copy, PartialEq)]
@@ -211,66 +208,26 @@ fn usage() {
 /// Pick the probe backend for the chosen protocol. Returns `None` if we handed
 /// off to an elevated relaunch (caller should exit cleanly).
 fn build_factory(proto: Proto, dest: IpAddr, port: u16) -> Option<Arc<dyn BackendFactory>> {
-    match proto {
-        Proto::Icmp => Some(Arc::new(IcmpBackendFactory)),
-        Proto::Tcp => {
-            let IpAddr::V4(d4) = dest else {
-                eprintln!("hopscout: TCP mode is IPv4-only");
-                std::process::exit(1);
-            };
-            let caps = detect_caps();
-            if !caps.rung3() {
-                eprintln!("hopscout: TCP mode (rung 3) needs Npcap — install from https://npcap.com");
-                std::process::exit(1);
-            }
-            if !caps.elevated {
-                eprintln!("hopscout: TCP injection needs admin — relaunching elevated…");
-                match relaunch_elevated() {
-                    Ok(()) => return None,
-                    Err(e) => {
-                        eprintln!("hopscout: elevation failed: {e}");
-                        std::process::exit(1);
-                    }
-                }
-            }
-            let local = local_ipv4_for(d4).unwrap_or_else(|e| {
-                eprintln!("hopscout: could not find local interface: {e}");
-                std::process::exit(1);
-            });
-            match NpcapTcpBackendFactory::new(d4, port, local) {
-                Ok(f) => Some(Arc::new(f)),
+    let pp = match proto {
+        Proto::Icmp => ProbeProtocol::Icmp,
+        Proto::Udp => ProbeProtocol::Udp,
+        Proto::Tcp => ProbeProtocol::TcpSyn,
+    };
+    match make_factory(pp, dest, port) {
+        Ok(factory) => Some(factory),
+        Err(BackendError::NeedsElevation) => {
+            eprintln!("hopscout: this mode needs admin — relaunching elevated…");
+            match relaunch_elevated() {
+                Ok(()) => None,
                 Err(e) => {
-                    eprintln!("hopscout: TCP backend failed: {e}");
+                    eprintln!("hopscout: elevation failed: {e}");
                     std::process::exit(1);
                 }
             }
         }
-        Proto::Udp => {
-            let IpAddr::V4(d4) = dest else {
-                eprintln!("hopscout: UDP mode is IPv4-only");
-                std::process::exit(1);
-            };
-            if !detect_caps().rung2() {
-                eprintln!("hopscout: UDP mode (rung 2) needs admin — relaunching elevated…");
-                match relaunch_elevated() {
-                    Ok(()) => return None,
-                    Err(e) => {
-                        eprintln!("hopscout: elevation failed: {e}");
-                        std::process::exit(1);
-                    }
-                }
-            }
-            let local = local_ipv4_for(d4).unwrap_or_else(|e| {
-                eprintln!("hopscout: could not find local interface: {e}");
-                std::process::exit(1);
-            });
-            match RawUdpBackendFactory::new(local) {
-                Ok(f) => Some(Arc::new(f)),
-                Err(e) => {
-                    eprintln!("hopscout: raw socket failed: {e}");
-                    std::process::exit(1);
-                }
-            }
+        Err(e) => {
+            eprintln!("hopscout: {e}");
+            std::process::exit(1);
         }
     }
 }

@@ -10,12 +10,11 @@ mod sparkline;
 mod table;
 
 use std::net::{IpAddr, ToSocketAddrs};
-use std::sync::Arc;
 use std::time::Duration;
 
-use hopscout_core::{Engine, EngineConfig, brand};
+use hopscout_core::{Engine, EngineConfig, ProbeProtocol, brand};
 use hopscout_enrich::EnricherHandle;
-use hopscout_net::IcmpBackendFactory;
+use hopscout_net::{BackendError, make_factory, relaunch_elevated};
 
 fn main() -> eframe::Result<()> {
     let arg_target = std::env::args().nth(1);
@@ -53,9 +52,12 @@ struct HopscoutApp {
     target_input: String,
     interval_ms: u64,
     max_hops: u8,
+    proto: ProbeProtocol,
+    port: u16,
     running: Option<Running>,
     selected: Option<usize>,
     error: Option<String>,
+    needs_elevation: bool,
     show_about: bool,
 }
 
@@ -65,9 +67,12 @@ impl HopscoutApp {
             target_input: arg_target.clone().unwrap_or_default(),
             interval_ms: 1000,
             max_hops: 30,
+            proto: ProbeProtocol::Icmp,
+            port: 443,
             running: None,
             selected: None,
             error: None,
+            needs_elevation: false,
             show_about: false,
         };
         if arg_target.is_some() {
@@ -78,9 +83,10 @@ impl HopscoutApp {
 
     fn start(&mut self) {
         self.error = None;
+        self.needs_elevation = false;
         let Some(dest) = resolve(self.target_input.trim()) else {
             self.error = Some(format!(
-                "could not resolve an IPv4 address for '{}'",
+                "could not resolve an address for '{}'",
                 self.target_input.trim()
             ));
             return;
@@ -89,8 +95,22 @@ impl HopscoutApp {
         let mut config = EngineConfig::new(dest);
         config.interval = Duration::from_millis(self.interval_ms.max(1));
         config.max_hops = self.max_hops.max(1);
+        config.protocol = self.proto;
 
-        match Engine::start(config.clone(), Arc::new(IcmpBackendFactory)) {
+        let factory = match make_factory(self.proto, dest, self.port) {
+            Ok(f) => f,
+            Err(BackendError::NeedsElevation) => {
+                self.error = Some("This mode needs administrator privileges.".to_string());
+                self.needs_elevation = true;
+                return;
+            }
+            Err(e) => {
+                self.error = Some(e.to_string());
+                return;
+            }
+        };
+
+        match Engine::start(config.clone(), factory) {
             Ok(engine) => {
                 let enricher = hopscout_enrich::spawn(engine.session());
                 self.selected = None;
@@ -132,9 +152,21 @@ impl eframe::App for HopscoutApp {
 
                 let running = self.running.is_some();
                 ui.add_enabled_ui(!running, |ui| {
+                    ui.label("proto");
+                    egui::ComboBox::from_id_salt("proto")
+                        .selected_text(proto_label(self.proto))
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut self.proto, ProbeProtocol::Icmp, "ICMP");
+                            ui.selectable_value(&mut self.proto, ProbeProtocol::Udp, "UDP");
+                            ui.selectable_value(&mut self.proto, ProbeProtocol::TcpSyn, "TCP");
+                        });
+                    if self.proto == ProbeProtocol::TcpSyn {
+                        ui.label("port");
+                        ui.add(egui::DragValue::new(&mut self.port).range(1..=65535));
+                    }
                     ui.label("interval");
                     ui.add(egui::DragValue::new(&mut self.interval_ms).suffix(" ms").range(1..=60_000));
-                    ui.label("max hops");
+                    ui.label("hops");
                     ui.add(egui::DragValue::new(&mut self.max_hops).range(1..=64));
                 });
 
@@ -165,8 +197,12 @@ impl eframe::App for HopscoutApp {
         });
 
         egui::CentralPanel::default().show_inside(ui, |ui| {
-            if let Some(err) = &self.error {
-                ui.colored_label(egui::Color32::from_rgb(220, 80, 80), err);
+            if let Some(err) = self.error.clone() {
+                ui.colored_label(egui::Color32::from_rgb(220, 80, 80), &err);
+                if self.needs_elevation && ui.button("Relaunch as administrator").clicked() {
+                    let _ = relaunch_elevated();
+                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                }
                 ui.separator();
             }
 
@@ -216,6 +252,14 @@ impl eframe::App for HopscoutApp {
                     }
                 });
         }
+    }
+}
+
+fn proto_label(p: ProbeProtocol) -> &'static str {
+    match p {
+        ProbeProtocol::Icmp => "ICMP",
+        ProbeProtocol::Udp => "UDP",
+        ProbeProtocol::TcpSyn => "TCP",
     }
 }
 
