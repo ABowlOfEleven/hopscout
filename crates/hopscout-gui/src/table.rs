@@ -4,8 +4,8 @@
 use egui_extras::{Column, TableBuilder};
 use hopscout_core::Session;
 
-const HEADERS: [&str; 10] = [
-    "Hop", "Host", "ASN", "Loss%", "Snt", "Last", "Avg", "Best", "Wrst", "Jitter",
+const HEADERS: [&str; 11] = [
+    "Hop", "Host", "ASN", "Loss%", "Snt", "Last", "Avg", "Best", "Wrst", "Jitter", "p95",
 ];
 
 pub fn show(ui: &mut egui::Ui, session: &Session, selected: &mut Option<usize>) {
@@ -23,7 +23,8 @@ pub fn show(ui: &mut egui::Ui, session: &Session, selected: &mut Option<usize>) 
         .column(Column::auto()) // avg
         .column(Column::auto()) // best
         .column(Column::auto()) // worst
-        .column(Column::remainder()) // jitter
+        .column(Column::auto()) // jitter
+        .column(Column::remainder()) // p95
         .header(20.0, |mut header| {
             for title in HEADERS {
                 header.col(|ui| {
@@ -80,6 +81,9 @@ pub fn show(ui: &mut egui::Ui, session: &Session, selected: &mut Option<usize>) 
                 });
                 row.col(|ui| {
                     ui.label(fmt_ms(st.stddev_ms()));
+                });
+                row.col(|ui| {
+                    ui.label(fmt_ms(st.p95_ms()));
                 });
             });
         });

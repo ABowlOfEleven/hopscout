@@ -50,7 +50,7 @@ fn title_line<'a>(engine: &Engine, target_label: &'a str, config: &EngineConfig)
 
 fn hop_table(session: &Session) -> Table<'static> {
     let header = Row::new([
-        "Hop", "Host", "ASN", "Loss%", "Snt", "Last", "Avg", "Best", "Wrst", "Jttr",
+        "Hop", "Host", "ASN", "Loss%", "Snt", "Last", "Avg", "Best", "Wrst", "Jttr", "p95",
     ])
     .style(Style::default().add_modifier(Modifier::BOLD));
 
@@ -83,6 +83,7 @@ fn hop_table(session: &Session) -> Table<'static> {
                 Cell::from(fmt_ms(st.best_ms())),
                 Cell::from(fmt_ms(st.worst_ms())),
                 Cell::from(fmt_ms(st.stddev_ms())),
+                Cell::from(fmt_ms(st.p95_ms())),
             ])
         })
         .collect();
@@ -93,6 +94,7 @@ fn hop_table(session: &Session) -> Table<'static> {
         Constraint::Length(9),
         Constraint::Length(6),
         Constraint::Length(5),
+        Constraint::Length(8),
         Constraint::Length(8),
         Constraint::Length(8),
         Constraint::Length(8),

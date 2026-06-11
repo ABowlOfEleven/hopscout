@@ -27,11 +27,18 @@ pub fn panel(ui: &mut egui::Ui, session: &Session, selected: Option<usize>) {
         ui.strong(format!("Hop {}", i + 1));
         ui.label(host);
         if let Some(avg) = hop.stat.avg_ms() {
-            ui.label(format!("avg {avg:.1} ms"));
+            ui.label(format!("avg {avg:.1}"));
         }
         if let Some(j) = hop.stat.stddev_ms() {
-            ui.label(format!("jitter {j:.1} ms"));
+            ui.label(format!("· jitter {j:.1}"));
         }
+        let pct = |label: &str, v: Option<f64>| {
+            v.map(|x| format!("· {label} {x:.1}")).unwrap_or_default()
+        };
+        ui.label(pct("p50", hop.stat.p50_ms()));
+        ui.label(pct("p95", hop.stat.p95_ms()));
+        ui.label(pct("p99", hop.stat.p99_ms()));
+        ui.weak("ms");
     });
 
     let width = ui.available_width().min(820.0);
