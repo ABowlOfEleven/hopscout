@@ -1767,6 +1767,8 @@ version = "0.1.0"
 dependencies = [
  "dns-lookup",
  "hopscout-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -20,6 +20,11 @@ pub struct HopMeta {
     pub asn: Option<u32>,
     /// Human-readable AS name / org.
     pub as_name: Option<String>,
+    /// Approximate geolocation (degrees) for the map view.
+    pub lat: Option<f32>,
+    pub lon: Option<f32>,
+    pub city: Option<String>,
+    pub country: Option<String>,
 }
 
 /// One hop on the path (one TTL value).

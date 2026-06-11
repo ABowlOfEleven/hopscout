@@ -6,8 +6,10 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod map;
 mod sparkline;
 mod table;
+mod topo;
 
 use std::net::{IpAddr, ToSocketAddrs};
 use std::time::Duration;
@@ -48,12 +50,20 @@ impl Running {
     }
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum View {
+    Table,
+    Map,
+    Topology,
+}
+
 struct HopscoutApp {
     target_input: String,
     interval_ms: u64,
     max_hops: u8,
     proto: ProbeProtocol,
     port: u16,
+    view: View,
     running: Option<Running>,
     selected: Option<usize>,
     error: Option<String>,
@@ -69,6 +79,7 @@ impl HopscoutApp {
             max_hops: 30,
             proto: ProbeProtocol::Icmp,
             port: 443,
+            view: View::Table,
             running: None,
             selected: None,
             error: None,
@@ -193,6 +204,11 @@ impl eframe::App for HopscoutApp {
                     }
                 });
             });
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut self.view, View::Table, "Table");
+                ui.selectable_value(&mut self.view, View::Map, "Map");
+                ui.selectable_value(&mut self.view, View::Topology, "Topology");
+            });
             ui.add_space(4.0);
         });
 
@@ -226,10 +242,15 @@ impl eframe::App for HopscoutApp {
             });
             ui.separator();
 
-            table::show(ui, &snapshot, &mut self.selected);
-
-            ui.separator();
-            sparkline::panel(ui, &snapshot, self.selected);
+            match self.view {
+                View::Table => {
+                    table::show(ui, &snapshot, &mut self.selected);
+                    ui.separator();
+                    sparkline::panel(ui, &snapshot, self.selected);
+                }
+                View::Map => map::show(ui, &snapshot),
+                View::Topology => topo::show(ui, &snapshot),
+            }
         });
 
         if self.show_about {

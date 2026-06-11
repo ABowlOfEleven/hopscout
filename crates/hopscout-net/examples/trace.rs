@@ -56,8 +56,8 @@ fn main() -> std::io::Result<()> {
     let s = engine.snapshot();
 
     println!(
-        "{:>3}  {:<28}  {:>8}  {:>6}  {:>8}  {:>8}",
-        "TTL", "Host", "ASN", "Loss%", "Last", "Avg"
+        "{:>3}  {:<26}  {:>8}  {:<18}  {:>6}  {:>7}",
+        "TTL", "Host", "ASN", "Geo", "Loss%", "Avg"
     );
     for i in 0..s.visible_hops() {
         let hop = &s.hops[i];
@@ -68,12 +68,16 @@ fn main() -> std::io::Result<()> {
             .or_else(|| hop.primary_addr().map(|a| a.to_string()))
             .unwrap_or_else(|| "*".to_string());
         let asn = hop.meta.asn.map(|n| format!("AS{n}")).unwrap_or_default();
+        let geo = match (&hop.meta.city, &hop.meta.country) {
+            (Some(c), Some(cc)) if !c.is_empty() => format!("{c}, {cc}"),
+            (_, Some(cc)) => cc.clone(),
+            _ => String::new(),
+        };
         let f = |v: Option<f64>| v.map(|x| format!("{x:.1}ms")).unwrap_or_else(|| "-".into());
         println!(
-            "{:>3}  {host:<28.28}  {asn:>8}  {:>5.0}%  {:>8}  {:>8}",
+            "{:>3}  {host:<26.26}  {asn:>8}  {geo:<18.18}  {:>5.0}%  {:>7}",
             i + 1,
             hop.stat.loss_pct(),
-            f(hop.stat.last_ms()),
             f(hop.stat.avg_ms()),
         );
     }

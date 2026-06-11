@@ -11,6 +11,7 @@
 //!   and addresses are batched into a single query per round.
 
 mod cymru;
+mod geo;
 
 use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
@@ -71,6 +72,12 @@ fn run(session: Arc<Mutex<Session>>, stop: Arc<AtomicBool>) {
             apply_asn(&session, &asn);
         }
 
+        // Batched geolocation for the map view.
+        let geo = geo::lookup(&todo);
+        if !geo.is_empty() {
+            apply_geo(&session, &geo);
+        }
+
         // Slow path: reverse DNS is per-address and can block on hosts with no
         // PTR, so it trickles in without holding up the ASN column.
         for addr in &todo {
@@ -108,6 +115,21 @@ fn apply_asn(session: &Arc<Mutex<Session>>, asn: &HashMap<IpAddr, cymru::Origin>
             if let Some(o) = asn.get(&addr) {
                 hop.meta.asn = Some(o.asn);
                 hop.meta.as_name = Some(o.name.clone());
+            }
+        }
+    }
+}
+
+/// Write a batch of geolocations into every matching hop, in one lock.
+fn apply_geo(session: &Arc<Mutex<Session>>, geo: &HashMap<IpAddr, geo::Geo>) {
+    let mut s = session.lock().unwrap();
+    for hop in &mut s.hops {
+        if let Some(addr) = hop.primary_addr() {
+            if let Some(g) = geo.get(&addr) {
+                hop.meta.lat = Some(g.lat);
+                hop.meta.lon = Some(g.lon);
+                hop.meta.city = Some(g.city.clone());
+                hop.meta.country = Some(g.country.clone());
             }
         }
     }
