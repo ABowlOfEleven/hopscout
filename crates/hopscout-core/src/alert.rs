@@ -112,13 +112,13 @@ mod tests {
     fn hop1(ip: [u8; 4], rtt_ms: u64) -> Session {
         let mut s = Session::default();
         s.on_sent(1);
-        s.on_response(&ProbeResponse {
-            ttl: 1,
-            seq: 0,
-            outcome: ProbeOutcome::TtlExceeded,
-            from: Some(IpAddr::V4(Ipv4Addr::from(ip))),
-            rtt: Some(Duration::from_millis(rtt_ms)),
-        });
+        s.on_response(&ProbeResponse::new(
+            1,
+            0,
+            ProbeOutcome::TtlExceeded,
+            Some(IpAddr::V4(Ipv4Addr::from(ip))),
+            Some(Duration::from_millis(rtt_ms)),
+        ));
         s.note_reached(1);
         s
     }

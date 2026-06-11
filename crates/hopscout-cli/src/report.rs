@@ -38,29 +38,25 @@ fn truncate(s: &str, max: usize) -> String {
 pub fn text(s: &Session, args: &Args, config: &EngineConfig) -> String {
     let start = (config.first_ttl as usize).saturating_sub(1);
     let n = s.visible_hops();
-    let f = |v: Option<f64>| v.map(|x| format!("{x:.1}")).unwrap_or_else(|| "-".into());
 
     let mut out = String::new();
-    out.push_str(&format!(
-        "{:<8}{:<33} Loss%   Snt   Last    Avg   Best   Wrst  StDev\n",
-        "HOST:", args.target
-    ));
+    let mut header = format!("{:<8}{:<33}", "HOST:", args.target);
+    for f in &args.fields {
+        header.push_str(&format!(" {:>w$}", f.header(), w = f.width() as usize));
+    }
+    header.push('\n');
+    out.push_str(&header);
+
     for i in start..n {
         let st = &s.hops[i].stat;
         let host = host_label(s, i, args);
         let host = if args.wide { host } else { truncate(&host, 33) };
-        out.push_str(&format!(
-            "{:>3}.|-- {:<33} {:>4.1}% {:>5} {:>6} {:>6} {:>6} {:>6} {:>6}\n",
-            i + 1,
-            host,
-            st.loss_pct(),
-            st.sent(),
-            f(st.last_ms()),
-            f(st.avg_ms()),
-            f(st.best_ms()),
-            f(st.worst_ms()),
-            f(st.stddev_ms()),
-        ));
+        let mut row = format!("{:>3}.|-- {:<33}", i + 1, host);
+        for f in &args.fields {
+            row.push_str(&format!(" {:>w$}", f.value(st), w = f.width() as usize));
+        }
+        row.push('\n');
+        out.push_str(&row);
         if args.mpls {
             for m in &s.hops[i].mpls {
                 out.push_str(&format!(

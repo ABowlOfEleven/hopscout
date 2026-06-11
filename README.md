@@ -84,12 +84,15 @@ cargo run -p hopscout-cli -- 8.8.8.8 --mtu     # path MTU probe
 | `--flows <n>` | concurrent flows (multipath) | 1 |
 | `--mtu` | probe path MTU and exit | |
 | `-e, --aslookup` | AS lookup (always on) | |
+| `-z, --mpls` | show MPLS labels (udp/tcp modes) | |
+| `-o, --order <fields>` | stat columns: `L S R D N A B W V P` | LSNABWVP |
 | `-v, --version` | print version | |
 
 `-u` needs admin (raw `SIO_RCVALL` sniffer to capture ICMP errors); `-T` needs
 Npcap plus admin (packet injection). hopscout detects the gap and relaunches
-itself elevated. MPLS (`-z`), XML (`-x`), and source `--address` are accepted
-for compatibility but not yet implemented.
+itself elevated. MPLS labels (`-z`) are decoded from ICMP extensions in the
+udp/tcp paths (the unprivileged ICMP API can't expose them). XML (`-x`) and
+source `--address` are accepted for compatibility but not yet implemented.
 
 Keys (interactive): `q`/`Esc` quit, `p`/space pause, `r` reset, `b` baseline.
 

@@ -1,12 +1,15 @@
 //! Rendering for the CLI: a title line, the live hop table, and a key hint.
 
 use hopscout_core::{Alert, Engine, EngineConfig, Session};
+
+use crate::fields::Field;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Cell, Paragraph, Row, Table};
 
+#[allow(clippy::too_many_arguments)]
 pub fn draw(
     frame: &mut Frame,
     session: &Session,
@@ -16,6 +19,7 @@ pub fn draw(
     has_baseline: bool,
     alerts: &[Alert],
     show_mpls: bool,
+    fields: &[Field],
 ) {
     let chunks = Layout::vertical([
         Constraint::Length(1), // title
@@ -25,7 +29,7 @@ pub fn draw(
     .split(frame.area());
 
     frame.render_widget(title_line(engine, target_label, config), chunks[0]);
-    frame.render_widget(hop_table(session, config.first_ttl, show_mpls), chunks[1]);
+    frame.render_widget(hop_table(session, config.first_ttl, show_mpls, fields), chunks[1]);
     frame.render_widget(footer_line(session, has_baseline, alerts), chunks[2]);
 }
 
@@ -49,11 +53,15 @@ fn title_line<'a>(engine: &Engine, target_label: &'a str, config: &EngineConfig)
     Paragraph::new(line)
 }
 
-fn hop_table(session: &Session, first_ttl: u8, show_mpls: bool) -> Table<'static> {
-    let header = Row::new([
-        "Hop", "Host", "ASN", "Loss%", "Snt", "Last", "Avg", "Best", "Wrst", "Jttr", "p95",
-    ])
-    .style(Style::default().add_modifier(Modifier::BOLD));
+fn hop_table(
+    session: &Session,
+    first_ttl: u8,
+    show_mpls: bool,
+    fields: &[Field],
+) -> Table<'static> {
+    let mut header_cells = vec!["Hop".to_string(), "Host".to_string(), "ASN".to_string()];
+    header_cells.extend(fields.iter().map(|f| f.header().to_string()));
+    let header = Row::new(header_cells).style(Style::default().add_modifier(Modifier::BOLD));
 
     let start = (first_ttl as usize).saturating_sub(1);
     let rows: Vec<Row> = (start..session.visible_hops())
@@ -70,43 +78,31 @@ fn hop_table(session: &Session, first_ttl: u8, show_mpls: bool) -> Table<'static
                 let labels: Vec<String> = hop.mpls.iter().map(|m| m.label.to_string()).collect();
                 host = format!("{host} [MPLS {}]", labels.join(","));
             }
-            let asn = hop
-                .meta
-                .asn
-                .map(|n| format!("AS{n}"))
-                .unwrap_or_default();
+            let asn = hop.meta.asn.map(|n| format!("AS{n}")).unwrap_or_default();
             let st = &hop.stat;
-            let loss = st.loss_pct();
 
-            Row::new(vec![
+            let mut cells = vec![
                 Cell::from(format!("{ttl:>2}")),
                 Cell::from(host),
                 Cell::from(asn).style(Style::default().fg(Color::Cyan)),
-                Cell::from(format!("{loss:.0}%")).style(loss_style(loss)),
-                Cell::from(st.sent().to_string()),
-                Cell::from(fmt_ms(st.last_ms())),
-                Cell::from(fmt_ms(st.avg_ms())),
-                Cell::from(fmt_ms(st.best_ms())),
-                Cell::from(fmt_ms(st.worst_ms())),
-                Cell::from(fmt_ms(st.stddev_ms())),
-                Cell::from(fmt_ms(st.p95_ms())),
-            ])
+            ];
+            for f in fields {
+                let mut cell = Cell::from(f.value(st));
+                if f.is_loss() {
+                    cell = cell.style(loss_style(st.loss_pct()));
+                }
+                cells.push(cell);
+            }
+            Row::new(cells)
         })
         .collect();
 
-    let widths = [
+    let mut widths = vec![
         Constraint::Length(3),
         Constraint::Min(18),
         Constraint::Length(9),
-        Constraint::Length(6),
-        Constraint::Length(5),
-        Constraint::Length(8),
-        Constraint::Length(8),
-        Constraint::Length(8),
-        Constraint::Length(8),
-        Constraint::Length(8),
-        Constraint::Length(8),
     ];
+    widths.extend(fields.iter().map(|f| Constraint::Length(f.width() + 1)));
 
     Table::new(rows, widths)
         .header(header)
@@ -156,8 +152,4 @@ fn loss_style(loss: f64) -> Style {
         Color::Red
     };
     Style::default().fg(color)
-}
-
-fn fmt_ms(v: Option<f64>) -> String {
-    v.map(|x| format!("{x:.1}")).unwrap_or_else(|| "-".to_string())
 }

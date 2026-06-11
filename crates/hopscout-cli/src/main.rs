@@ -3,6 +3,7 @@
 //! Default is the live full-screen view (like `mtr`); `-r`/`--json`/`--csv` give
 //! non-interactive report output, and `--mtu` does a one-shot path-MTU probe.
 
+mod fields;
 mod report;
 mod ui;
 
@@ -48,6 +49,7 @@ pub struct Args {
     show_ips: bool,
     wide: bool,
     mpls: bool,
+    fields: Vec<fields::Field>,
 }
 
 fn main() -> io::Result<()> {
@@ -99,7 +101,7 @@ fn main() -> io::Result<()> {
     let enricher = hopscout_enrich::spawn_with(engine.session(), !args.no_dns);
 
     let result = match args.mode {
-        Mode::Interactive => run_tui(&engine, &args.target, &config, args.mpls),
+        Mode::Interactive => run_tui(&engine, &args.target, &config, args.mpls, &args.fields),
         Mode::Report | Mode::Json | Mode::Csv => run_report(&engine, &args, &config),
         Mode::Mtu => Ok(()),
     };
@@ -115,9 +117,10 @@ fn run_tui(
     target_label: &str,
     config: &EngineConfig,
     show_mpls: bool,
+    fields: &[fields::Field],
 ) -> io::Result<()> {
     let mut terminal = ratatui::init();
-    let out = tui_loop(&mut terminal, engine, target_label, config, show_mpls);
+    let out = tui_loop(&mut terminal, engine, target_label, config, show_mpls, fields);
     ratatui::restore();
     out
 }
@@ -128,6 +131,7 @@ fn tui_loop(
     target_label: &str,
     config: &EngineConfig,
     show_mpls: bool,
+    fields: &[fields::Field],
 ) -> io::Result<()> {
     let mut baseline: Option<Baseline> = None;
     loop {
@@ -146,6 +150,7 @@ fn tui_loop(
                 baseline.is_some(),
                 &alerts,
                 show_mpls,
+                fields,
             )
         })?;
 
@@ -229,6 +234,7 @@ fn parse_args() -> Result<Option<Args>, String> {
     let mut csv = false;
     let mut mtu = false;
     let mut mpls = false;
+    let mut order: Option<String> = None;
 
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
@@ -266,6 +272,7 @@ fn parse_args() -> Result<Option<Args>, String> {
             }
             "--flows" => flows = next_num(&mut it, "flows")?,
             "-z" | "--mpls" => mpls = true,
+            "-o" | "--order" => order = Some(it.next().ok_or("--order needs FIELDS (e.g. LSNABWV)")?),
             // Accepted for MTR compatibility but not yet implemented.
             "-x" | "--xml" => eprintln!("hopscout: note: XML output is not supported yet"),
             "-a" | "--address" => {
@@ -315,6 +322,7 @@ fn parse_args() -> Result<Option<Args>, String> {
         show_ips,
         wide,
         mpls,
+        fields: order.map(|s| fields::parse_order(&s)).unwrap_or_else(fields::default),
     }))
 }
 
@@ -360,6 +368,7 @@ fn usage() {
          DISPLAY:\n\
          \x20   -n, --no-dns           don't resolve host names\n\
          \x20   -b, --show-ips         show IPs alongside names\n\
+         \x20   -o, --order FIELDS     stat columns: L S R D N A B W V P\n\
          \x20   -e, --aslookup         AS lookup (always on)\n\
          \x20   -z, --mpls             show MPLS labels (udp/tcp modes)\n\
          \x20   -v, --version          print version\n\

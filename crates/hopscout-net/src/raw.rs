@@ -45,8 +45,11 @@ enum IcmpKind {
     Unreachable,
 }
 
+/// What the reader thread hands a waiting probe: responder, kind, MPLS labels.
+type IcmpReply = (IpAddr, IcmpKind, Vec<MplsLabel>);
+
 struct Shared {
-    waiters: Mutex<HashMap<u16, SyncSender<(IpAddr, IcmpKind, Vec<MplsLabel>)>>>,
+    waiters: Mutex<HashMap<u16, SyncSender<IcmpReply>>>,
     stop: AtomicBool,
 }
 
@@ -90,7 +93,7 @@ impl IcmpReceiver {
             .wrapping_add((n % FLOW_SPAN as u32) as u16)
     }
 
-    fn register(&self, port: u16) -> Receiver<(IpAddr, IcmpKind, Vec<MplsLabel>)> {
+    fn register(&self, port: u16) -> Receiver<IcmpReply> {
         let (tx, rx) = sync_channel(1);
         self.shared.waiters.lock().unwrap().insert(port, tx);
         rx
