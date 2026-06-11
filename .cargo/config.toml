@@ -1,0 +1,6 @@
+# Statically link the MSVC C runtime so the binaries run on a clean Windows
+# install with no Visual C++ redistributable. Without this, the exes fail to
+# start with STATUS_DLL_NOT_FOUND (missing vcruntime140.dll) on a machine that
+# has never had the VC++ redist, which is what winget's Sandbox validation hit.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
