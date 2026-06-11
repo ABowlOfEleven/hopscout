@@ -7,9 +7,9 @@
 pub struct Capabilities {
     /// Process token is elevated (admin).
     pub elevated: bool,
-    /// A raw `SIO_RCVALL` sniffer could be stood up — gate for rung-2 UDP mode.
+    /// A raw `SIO_RCVALL` sniffer could be stood up - gate for rung-2 UDP mode.
     pub raw_icmp: bool,
-    /// Npcap (`wpcap.dll`) is installed — gate for rung-3 full packet craft.
+    /// Npcap (`wpcap.dll`) is installed - gate for rung-3 full packet craft.
     pub npcap: bool,
 }
 

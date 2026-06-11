@@ -1,7 +1,7 @@
 //! Geolocation via ip-api.com's batch endpoint (free, no key, HTTP).
 //!
 //! Like the Cymru WHOIS lookup, this is a single batched online call per round
-//! over a plain `TcpStream` — we speak HTTP/1.0 so the response is a simple
+//! over a plain `TcpStream` - we speak HTTP/1.0 so the response is a simple
 //! headers + body with no chunked transfer-encoding to unwrap.
 
 use std::collections::HashMap;

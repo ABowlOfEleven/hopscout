@@ -2,12 +2,12 @@
 //!
 //! Runs on its own thread, polling the shared [`Session`] for hop addresses we
 //! haven't looked up yet. Each address is resolved at most once (cached), and
-//! all DNS/WHOIS I/O happens with the session lock released — enrichment never
+//! all DNS/WHOIS I/O happens with the session lock released - enrichment never
 //! stalls the probe engine or the UI.
 //!
 //! * Reverse DNS uses the system resolver via `dns-lookup` (`getnameinfo`).
 //! * Origin ASN uses Team Cymru's WHOIS netcat interface at
-//!   `whois.cymru.com:43` — a plain line-based TCP protocol, no async runtime,
+//!   `whois.cymru.com:43` - a plain line-based TCP protocol, no async runtime,
 //!   and addresses are batched into a single query per round.
 
 mod cymru;

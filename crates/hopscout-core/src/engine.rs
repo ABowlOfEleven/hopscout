@@ -1,7 +1,7 @@
 //! The continuous probe engine.
 //!
 //! Model: **one persistent thread per hop (TTL)**. Each worker owns its own
-//! backend handle and loops — send a probe at its TTL, fold the result into the
+//! backend handle and loops - send a probe at its TTL, fold the result into the
 //! shared [`Session`], sleep one interval, repeat. Hops are fully independent:
 //! a router that times out stalls only its own row, never the hops above it.
 //!

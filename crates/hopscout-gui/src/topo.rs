@@ -2,7 +2,7 @@
 //! address (a column with several nodes is an ECMP fan-out). When multiple
 //! flows are probed, each flow's path is drawn as its own colored polyline, so
 //! divergence and reconvergence through load balancers are visible. Nodes are
-//! colored by origin ASN — line color = which flow, node color = which network.
+//! colored by origin ASN - line color = which flow, node color = which network.
 
 use std::collections::HashMap;
 use std::net::IpAddr;

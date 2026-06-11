@@ -11,7 +11,7 @@ use crate::{
     IcmpBackendFactory, NpcapTcpBackendFactory, RawUdpBackendFactory, detect_caps, local_ipv4_for,
 };
 
-/// Why a backend couldn't be built — frontends turn these into prompts.
+/// Why a backend couldn't be built - frontends turn these into prompts.
 #[derive(Debug)]
 pub enum BackendError {
     /// Needs an elevated process (raw sniffer / packet injection).

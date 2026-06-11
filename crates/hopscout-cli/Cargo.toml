@@ -6,7 +6,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "hopscout terminal UI — a live MTR-style trace table (ratatui)"
+description = "hopscout terminal UI - a live MTR-style trace table (ratatui)"
 
 [[bin]]
 name = "hopscout"

@@ -6,7 +6,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "Elevated probe helper for hopscout — owns the privileged sockets, serves over a named pipe (privilege separation)"
+description = "Elevated probe helper for hopscout - owns the privileged sockets, serves over a named pipe (privilege separation)"
 
 [[bin]]
 name = "hopscout-helper"

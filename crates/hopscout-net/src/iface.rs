@@ -71,7 +71,7 @@ fn arp(target: Ipv4Addr, src: Ipv4Addr) -> io::Result<[u8; 6]> {
 /// Find the adapter that owns `src_ip`; return its Npcap device name + MAC.
 fn adapter_for(src_ip: Ipv4Addr) -> io::Result<(String, [u8; 6])> {
     let mut size: u32 = 0;
-    // SAFETY: sizing call — returns ERROR_BUFFER_OVERFLOW and sets `size`.
+    // SAFETY: sizing call - returns ERROR_BUFFER_OVERFLOW and sets `size`.
     unsafe {
         let _ = GetAdaptersInfo(None, &mut size);
     }

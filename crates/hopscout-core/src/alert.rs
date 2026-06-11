@@ -1,5 +1,5 @@
 //! Path-change detection: capture a [`Baseline`] of the path, then report how
-//! the live [`Session`] deviates from it — route changes, hops appearing or
+//! the live [`Session`] deviates from it - route changes, hops appearing or
 //! disappearing, latency regressions, and loss onset. Frontends snapshot a
 //! baseline (a key / button) and render the live deviation list.
 

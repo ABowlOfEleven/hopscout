@@ -2,8 +2,8 @@
 //! user gets a UAC prompt, then the elevated copy can open the raw socket.
 //!
 //! This is the simple privilege path for rung 2. A future hardening is full
-//! privilege *separation* — a tiny always-elevated helper that owns only the
-//! socket and talks to the unprivileged UI over a named pipe — so the large
+//! privilege *separation* - a tiny always-elevated helper that owns only the
+//! socket and talks to the unprivileged UI over a named pipe - so the large
 //! surface never runs as admin. The capability/IPC seam is shaped for that.
 
 use std::ffi::OsStr;

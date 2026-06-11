@@ -45,7 +45,7 @@ fn is_elevated() -> bool {
 }
 
 /// True if we can actually stand up the rung-2 sniffer (raw IP + `SIO_RCVALL`),
-/// which is what UDP/TCP modes need to receive ICMP errors. This needs admin —
+/// which is what UDP/TCP modes need to receive ICMP errors. This needs admin -
 /// note that a plain raw ICMP socket may open without it but can't see errors.
 fn raw_sniffer_available() -> bool {
     use std::net::Ipv4Addr;

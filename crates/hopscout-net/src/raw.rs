@@ -1,7 +1,7 @@
 //! Rung-2 UDP traceroute backend.
 //!
 //! Windows blocks crafting raw TCP/UDP, so the classic Unix approach doesn't
-//! port — but we don't need it. We *send* UDP datagrams with a custom TTL via an
+//! port - but we don't need it. We *send* UDP datagrams with a custom TTL via an
 //! ordinary socket (no elevation to send), and *receive* the resulting ICMP
 //! "time exceeded" / "port unreachable" replies on a raw ICMP socket (which
 //! needs admin). That raw receive socket is the privileged resource.
@@ -162,7 +162,7 @@ fn reader_loop(socket: Socket, shared: Arc<Shared>) {
     while !shared.stop.load(Ordering::Relaxed) {
         let (n, from) = match socket.recv_from(&mut buf) {
             Ok(v) => v,
-            Err(_) => continue, // timeout / transient — re-check stop and loop
+            Err(_) => continue, // timeout / transient - re-check stop and loop
         };
         // SAFETY: recv_from initialized the first `n` bytes.
         let bytes = unsafe { core::slice::from_raw_parts(buf.as_ptr() as *const u8, n) };
@@ -288,7 +288,7 @@ pub struct RawUdpBackendFactory {
 }
 
 impl RawUdpBackendFactory {
-    /// `local` is the interface address that routes to the target — see
+    /// `local` is the interface address that routes to the target - see
     /// [`local_ipv4_for`].
     pub fn new(local: Ipv4Addr) -> io::Result<Self> {
         Ok(Self {

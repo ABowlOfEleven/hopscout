@@ -300,6 +300,23 @@ pub fn load_custom() -> Vec<Theme> {
     out
 }
 
+const STARTER_TOML: &str = r##"# hopscout custom theme - copy and tweak. Colors are #rrggbb (or #rrggbbaa).
+name = "Custom Example"
+dark = true
+bg      = "#101418"
+panel   = "#1b222b"
+surface = "#0b0f14"
+text    = "#d6dde6"
+muted   = "#7c8794"
+accent  = "#ff7a59"
+accent2 = "#59b6ff"
+good    = "#6fcf86"
+warn    = "#e6c25a"
+bad     = "#e0685a"
+grid    = "#26303a"
+flow    = ["#ff7a59", "#59b6ff", "#e6c25a", "#c06ed0", "#5ad2c2", "#e06e6e"]
+"##;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -326,20 +343,3 @@ mod tests {
         assert!(all().len() >= 6);
     }
 }
-
-const STARTER_TOML: &str = r##"# hopscout custom theme — copy and tweak. Colors are #rrggbb (or #rrggbbaa).
-name = "Custom Example"
-dark = true
-bg      = "#101418"
-panel   = "#1b222b"
-surface = "#0b0f14"
-text    = "#d6dde6"
-muted   = "#7c8794"
-accent  = "#ff7a59"
-accent2 = "#59b6ff"
-good    = "#6fcf86"
-warn    = "#e6c25a"
-bad     = "#e0685a"
-grid    = "#26303a"
-flow    = ["#ff7a59", "#59b6ff", "#e6c25a", "#c06ed0", "#5ad2c2", "#e06e6e"]
-"##;

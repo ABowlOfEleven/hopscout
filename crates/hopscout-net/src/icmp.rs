@@ -2,7 +2,7 @@
 //!
 //! These are the same mechanism WinMTR uses: no elevation, the outgoing TTL /
 //! hop-limit is set via `IP_OPTION_INFORMATION`, and the responding router's
-//! address plus round-trip time come back directly — a full traceroute with no
+//! address plus round-trip time come back directly - a full traceroute with no
 //! raw packets. The ceiling is ICMP-only; UDP/TCP modes need rung 2.
 //!
 //! One [`IcmpBackend`] opens both an IPv4 and an IPv6 handle and dispatches in

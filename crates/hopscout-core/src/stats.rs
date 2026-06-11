@@ -1,6 +1,6 @@
 //! Per-hop rolling statistics.
 //!
-//! Everything here is O(1) per probe and bounded in memory — no growing history
+//! Everything here is O(1) per probe and bounded in memory - no growing history
 //! to sort. Mean and variance use Welford's online algorithm (numerically
 //! stable), giving us jitter (RTT standard deviation) for free. Streaming
 //! percentiles (t-digest / fixed histogram) land in a later phase; the API is
@@ -13,7 +13,7 @@ const PCT_LO_MS: f64 = 0.05;
 const PCT_HI_MS: f64 = 5000.0;
 
 /// A log-spaced RTT histogram for O(1) streaming percentiles (all-time, bounded
-/// memory — 1 KB per hop). Resolution is fine at low RTTs where it matters.
+/// memory - 1 KB per hop). Resolution is fine at low RTTs where it matters.
 #[derive(Debug, Clone)]
 struct Hist {
     buckets: [u32; PCT_BUCKETS],

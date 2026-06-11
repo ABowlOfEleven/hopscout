@@ -1,4 +1,4 @@
-//! hopscout GUI — an egui front-end over the same engine the CLI uses.
+//! hopscout GUI - an egui front-end over the same engine the CLI uses.
 //!
 //! Multi-target: add several destinations and monitor them side by side. The
 //! left panel lists them with a live summary; the selected one drives the
@@ -328,7 +328,7 @@ impl HopscoutApp {
                             }
                         });
                     });
-                    let avg = dest_avg.map(|v| format!("{v:.0}ms")).unwrap_or_else(|| "—".into());
+                    let avg = dest_avg.map(|v| format!("{v:.0}ms")).unwrap_or_else(|| "-".into());
                     ui.weak(format!("{hops} hops · loss {worst:.0}% · {avg}"));
                     ui.add_space(4.0);
                 }

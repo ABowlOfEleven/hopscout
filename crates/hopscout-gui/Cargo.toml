@@ -6,7 +6,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "hopscout desktop GUI — live trace table + per-hop sparklines (egui)"
+description = "hopscout desktop GUI - live trace table + per-hop sparklines (egui)"
 
 # GUI binary. NB: must NOT case-collide with the CLI's `hopscout.exe` -- Windows
 # paths are case-insensitive, so `HopScout.exe` and `hopscout.exe` would clobber

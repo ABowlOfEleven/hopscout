@@ -1,7 +1,7 @@
-//! hopscout-net — the one crate allowed to touch Win32.
+//! hopscout-net - the one crate allowed to touch Win32.
 //!
-//! * Rung 1: [`IcmpBackend`] on `Icmp[6]SendEcho2` — no elevation, IPv4 + IPv6.
-//! * Rung 2: [`RawUdpBackend`] — UDP traceroute via a raw ICMP receive socket
+//! * Rung 1: [`IcmpBackend`] on `Icmp[6]SendEcho2` - no elevation, IPv4 + IPv6.
+//! * Rung 2: [`RawUdpBackend`] - UDP traceroute via a raw ICMP receive socket
 //!   (needs admin). [`detect_caps`] reports what's available and
 //!   [`relaunch_elevated`] re-launches the app with a UAC prompt.
 //!

@@ -28,7 +28,7 @@ pub struct ProbeRequest {
     pub payload_size: usize,
     /// Which probe flow this belongs to. Backends fold it into the flow tuple
     /// (UDP dest-port band / TCP source port) so distinct flows take distinct
-    /// paths through ECMP load balancers — the basis for multipath discovery.
+    /// paths through ECMP load balancers - the basis for multipath discovery.
     pub flow_id: u16,
 }
 
@@ -37,7 +37,7 @@ pub struct ProbeRequest {
 pub enum ProbeOutcome {
     /// Reached the final destination (ICMP echo reply / TCP SYN-ACK).
     Reply,
-    /// A router on the path returned "TTL exceeded" — `from` is that hop.
+    /// A router on the path returned "TTL exceeded" - `from` is that hop.
     TtlExceeded,
     /// Destination/host/net/port unreachable.
     Unreachable,
@@ -51,9 +51,9 @@ pub struct ProbeResponse {
     pub ttl: u8,
     pub seq: u64,
     pub outcome: ProbeOutcome,
-    /// The address that responded — `None` on [`ProbeOutcome::Timeout`].
+    /// The address that responded - `None` on [`ProbeOutcome::Timeout`].
     pub from: Option<IpAddr>,
-    /// Round-trip time — `None` on timeout.
+    /// Round-trip time - `None` on timeout.
     pub rtt: Option<Duration>,
     /// MPLS label stack from the hop's ICMP extension, if any. Only populated by
     /// the raw-socket / Npcap backends (the rung-1 ICMP API hides extensions).

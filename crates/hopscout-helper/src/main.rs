@@ -1,4 +1,4 @@
-//! hopscout-helper — the elevated half of hopscout's privilege separation.
+//! hopscout-helper - the elevated half of hopscout's privilege separation.
 //!
 //! Run this elevated (the app launches it via UAC). It owns the raw socket /
 //! Npcap and serves the unprivileged app over a named pipe; it parses nothing

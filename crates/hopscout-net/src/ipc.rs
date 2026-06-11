@@ -12,7 +12,7 @@
 //!
 //! Status: message framing is unit-tested; the server/client plumbing compiles.
 //! Full cross-elevation operation needs the pipe's security descriptor to admit
-//! a medium-integrity client (a NULL-DACL + low-integrity SACL label) — that ACL
+//! a medium-integrity client (a NULL-DACL + low-integrity SACL label) - that ACL
 //! work, and spawning the helper elevated, are the remaining steps and require an
 //! admin host to validate.
 
@@ -122,7 +122,7 @@ fn decode_resp(b: &[u8; RESP_LEN], ttl: u8, seq: u64) -> ProbeResponse {
 }
 
 // ---------------------------------------------------------------------------
-// Client side — used by the unprivileged app in place of the raw backends.
+// Client side - used by the unprivileged app in place of the raw backends.
 // ---------------------------------------------------------------------------
 
 /// A probe backend that proxies each probe to the elevated helper over the pipe.
@@ -169,7 +169,7 @@ impl BackendFactory for HelperBackendFactory {
 }
 
 // ---------------------------------------------------------------------------
-// Server side — run by the elevated helper binary.
+// Server side - run by the elevated helper binary.
 // ---------------------------------------------------------------------------
 
 /// Serve helper connections forever. Each connection gets its own privileged

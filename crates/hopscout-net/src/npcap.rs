@@ -1,6 +1,6 @@
 //! Runtime loading of Npcap's `wpcap.dll`.
 //!
-//! Npcap is **not bundled** — its license restricts redistribution (see
+//! Npcap is **not bundled** - its license restricts redistribution (see
 //! CONTRIBUTING). We load it dynamically with `libloading`, so hopscout builds
 //! and runs without the Npcap SDK; rung-3 features simply light up when the user
 //! has Npcap installed. This module wraps just the handful of `pcap_*` functions

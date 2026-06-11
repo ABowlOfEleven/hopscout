@@ -11,7 +11,7 @@ use crate::model::{ProbeRequest, ProbeResponse};
 ///
 /// Rung-1 (`IcmpSendEcho2`) implements this with no elevation. Rung-2 (raw
 /// sockets) and rung-3 (Npcap) implement the *same* trait behind the elevated
-/// probe helper, so the engine and frontends never learn which rung is active —
+/// probe helper, so the engine and frontends never learn which rung is active -
 /// they only consult the capability set to decide which features to offer.
 ///
 /// The MVP API is synchronous (one probe, block until reply or timeout); the
@@ -31,7 +31,7 @@ pub trait ProbeBackend {
 /// Produces backend instances, one per worker thread.
 ///
 /// Probe handles (e.g. an `IcmpCreateFile` handle) are not assumed thread-safe,
-/// so the engine never shares one across threads — it asks the factory for a
+/// so the engine never shares one across threads - it asks the factory for a
 /// fresh backend per hop. The factory itself is shared (`Send + Sync`).
 pub trait BackendFactory: Send + Sync {
     fn create(&self) -> io::Result<Box<dyn ProbeBackend + Send>>;

@@ -1,6 +1,6 @@
 //! Minimal IPv4 + TCP-SYN packet crafting for the rung-3 Npcap backend.
 //!
-//! Pure functions, no I/O — this is the part of rung 3 that can be fully
+//! Pure functions, no I/O - this is the part of rung 3 that can be fully
 //! unit-tested without Npcap or admin. Npcap sends at layer 2, so we also frame
 //! with Ethernet (see [`ethernet_frame`]).
 

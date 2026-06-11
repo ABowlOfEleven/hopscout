@@ -31,7 +31,7 @@ pub struct HopMeta {
 #[derive(Debug, Clone, Default)]
 pub struct Hop {
     /// Addresses observed responding at this TTL. More than one means the path
-    /// is load-balanced (ECMP) here — the seed of multipath discovery.
+    /// is load-balanced (ECMP) here - the seed of multipath discovery.
     pub addrs: Vec<IpAddr>,
     pub stat: HopStat,
     /// Recent RTTs in ms; `None` marks a lost probe. Bounded to [`HISTORY`].
