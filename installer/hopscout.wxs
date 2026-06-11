@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- hopscout MSI (WiX v5). Per-user install, no admin needed to install.
+     Installs the CLI (hopscout.exe), GUI (HopScout.exe), and the elevated probe
+     helper (hopscout-helper.exe), adds the install dir to the user PATH so the
+     `hopscout` CLI works in a terminal, and adds a Start Menu shortcut for the GUI.
+     Build from the repo root:
+       wix build installer/hopscout.wxs -arch x64 -o target/wix/hopscout-0.1.0-x64.msi -->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package
+      Name="hopscout"
+      Manufacturer="hopscout contributors"
+      Version="0.1.0.0"
+      UpgradeCode="B6E2F0A1-7C43-4D58-9E10-2A6B5C8D4F31"
+      Scope="perUser"
+      Compressed="yes">
+
+    <!-- AllowSameVersionUpgrades lets a rebuilt 0.1.0.0 MSI cleanly replace an
+         installed 0.1.0.0 (dev iteration) instead of being skipped by Windows
+         Installer's equal-file-version rule. -->
+    <MajorUpgrade
+        AllowSameVersionUpgrades="yes"
+        DowngradeErrorMessage="A newer version of hopscout is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="HopscoutIcon" SourceFile="assets/hopscout.ico" />
+    <Property Id="ARPPRODUCTICON" Value="HopscoutIcon" />
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="INSTALLFOLDER" Name="hopscout" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder" />
+
+    <Feature Id="Main" Title="hopscout" Level="1">
+      <!-- The GUI. Explicit GUIDs: auto ("*") collides because HopScout.exe and
+           hopscout.exe differ only by case (paths are case-insensitive). -->
+      <Component Id="GuiExe" Directory="INSTALLFOLDER" Guid="7A1E9C20-1F44-4B6A-9E11-A1B2C3D40001">
+        <File Id="HopScoutExe" Source="target/release/HopScout.exe" KeyPath="yes" />
+      </Component>
+      <!-- The MTR-compatible CLI. -->
+      <Component Id="CliExe" Directory="INSTALLFOLDER" Guid="7A1E9C20-1F44-4B6A-9E11-A1B2C3D40002">
+        <File Id="HopscoutCliExe" Source="target/release/hopscout.exe" KeyPath="yes" />
+      </Component>
+      <!-- The elevated probe helper (launched at runtime via UAC). -->
+      <Component Id="HelperExe" Directory="INSTALLFOLDER" Guid="7A1E9C20-1F44-4B6A-9E11-A1B2C3D40003">
+        <File Id="HopscoutHelperExe" Source="target/release/hopscout-helper.exe" KeyPath="yes" />
+      </Component>
+
+      <!-- Put the install dir on the user's PATH so `hopscout` runs in a shell. -->
+      <Component Id="PathEnv" Directory="INSTALLFOLDER" Guid="C3D5A2E4-8B16-4F70-9A21-7E0C1B2D3A45">
+        <Environment Id="HopscoutPath" Name="PATH" Value="[INSTALLFOLDER]"
+                     Permanent="no" Part="last" Action="set" System="no" />
+        <RegistryValue Root="HKCU" Key="Software\hopscout" Name="path"
+                       Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+
+      <!-- Start Menu shortcut for the GUI. -->
+      <Component Id="StartMenuShortcut" Directory="ProgramMenuFolder" Guid="7A1E9C20-1F44-4B6A-9E11-A1B2C3D40004">
+        <Shortcut Id="AppShortcut"
+                  Name="hopscout"
+                  Description="Live traceroute and network monitor (MTR-compatible)"
+                  Target="[INSTALLFOLDER]HopScout.exe"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="HopscoutIcon" />
+        <RegistryValue Root="HKCU" Key="Software\hopscout" Name="installed"
+                       Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </Feature>
+  </Package>
+</Wix>

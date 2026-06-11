@@ -1,5 +1,7 @@
 # hopscout
 
+[![CI](https://github.com/ABowlOfEleven/hopscout/actions/workflows/ci.yml/badge.svg)](https://github.com/ABowlOfEleven/hopscout/actions/workflows/ci.yml)
+
 A modern traceroute + continuous-monitoring tool for Windows - native, no
 elevation required for the default path - with a `ratatui` CLI and an `egui`
 GUI sharing one engine. MTR parity, plus ASN/Geo enrichment, path-change
@@ -13,6 +15,20 @@ alerting, multi-target dashboards, and multipath (Paris) discovery.
 > (live view plus report/JSON/CSV) and a themeable `egui` GUI over one engine,
 > with rDNS/ASN/geo enrichment and capability-gated self-elevation. A
 > privilege-separation helper is in progress.
+
+## Install
+
+- **Installer (MSI):** download `hopscout-<version>-x64.msi` from
+  [Releases](https://github.com/ABowlOfEleven/hopscout/releases). Per-user (no
+  admin to install); adds `hopscout` to your PATH and a Start Menu entry for the GUI.
+- **Portable:** `hopscout-<version>-x64-portable.zip` contains all three exes
+  (`hopscout.exe`, `HopScout.exe`, `hopscout-helper.exe`); unzip and run.
+- **winget:** `winget install ABowlOfEleven.hopscout` (once the manifest is published).
+- **From source:** Rust 1.85+ on Windows, then `cargo build --release` and
+  `cargo run -p hopscout-cli -- 8.8.8.8`.
+
+UDP and TCP modes need administrator rights (and Npcap for TCP); hopscout
+detects this and offers to relaunch elevated.
 
 ## Workspace
 

@@ -1,0 +1,59 @@
+name: CI
+
+# Build, test, and lint on every push to main and every pull request.
+#
+# hopscout is a Windows tool: hopscout-net/cli/gui/helper use Win32 FFI and only
+# build on Windows. hopscout-core and hopscout-enrich are platform-agnostic, so
+# we also build/test those on Linux to keep them honest.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  RUST_BACKTRACE: "1"
+
+jobs:
+  windows:
+    name: Windows (full workspace)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        # Pinned (not @stable) so a newer toolchain's clippy can't fail CI
+        # unexpectedly. Bump deliberately.
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.96.0"
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --workspace --locked
+      - name: Test
+        run: cargo test --workspace --locked
+      - name: Clippy (deny warnings)
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  portable:
+    name: Linux (core + enrich)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.96.0"
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --locked -p hopscout-core -p hopscout-enrich
+      - name: Test
+        run: cargo test --locked -p hopscout-core -p hopscout-enrich
+      - name: Clippy (deny warnings)
+        run: cargo clippy --locked -p hopscout-core -p hopscout-enrich --all-targets -- -D warnings

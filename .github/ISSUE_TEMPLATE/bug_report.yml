@@ -1,0 +1,57 @@
+name: Bug report
+description: Something isn't working as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please don't paste internal host names or IPs
+        you'd rather keep private; redact them if needed.
+  - type: input
+    id: version
+    attributes:
+      label: hopscout version
+      description: From `hopscout --version` or the GUI About box (e.g. 0.1.0).
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options:
+        - CLI (interactive)
+        - CLI (report / json / csv)
+        - GUI
+    validations:
+      required: true
+  - type: dropdown
+    id: proto
+    attributes:
+      label: Protocol
+      options:
+        - ICMP
+        - UDP (admin)
+        - TCP (Npcap + admin)
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you run, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Run `hopscout ...`
+        2. ...
+        3. See ...
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (optional)
+      description: Run with `RUST_LOG=info` and paste any relevant output.
+      render: shell

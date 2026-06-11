@@ -1,0 +1,122 @@
+name: Release
+
+# On a v* tag (or the "Run workflow" button): verify on Windows and, if it
+# passes, build the artifacts and publish a single GitHub Release:
+#   * portable .zip (hopscout.exe + HopScout.exe + hopscout-helper.exe)
+#   * MSI installer (WiX v5)
+# hopscout is Windows-only, so there is no Linux/macOS artifact.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. 0.1.0 (publishes tag v<version>)"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  RUST_BACKTRACE: "1"
+
+jobs:
+  meta:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            version="${{ github.event.inputs.version }}"
+          else
+            version="${GITHUB_REF_NAME}"
+          fi
+          version="${version#v}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          echo "Releasing $version (tag v$version)"
+      - name: Check tag matches crate version
+        shell: bash
+        run: |
+          crate_version="$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')"
+          if [ "$crate_version" != "${{ steps.v.outputs.version }}" ]; then
+            echo "::error::Tag '${{ steps.v.outputs.version }}' != crate version '$crate_version'. Bump [workspace.package].version in Cargo.toml AND the Version in installer/hopscout.wxs, then re-tag."
+            exit 1
+          fi
+
+  windows:
+    name: Windows (zip + MSI)
+    needs: meta
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.96.0"
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build (release)
+        run: cargo build --workspace --release --locked
+      - name: Test
+        run: cargo test --workspace --locked
+      - name: Clippy (deny warnings)
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Install WiX v5
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\.dotnet\tools"
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $V = "${{ needs.meta.outputs.version }}"
+          New-Item -ItemType Directory -Force dist | Out-Null
+
+          # MSI
+          wix build installer/hopscout.wxs -arch x64 -o "dist/hopscout-$V-x64.msi"
+          Remove-Item dist/*.wixpdb -ErrorAction SilentlyContinue
+
+          # Portable zip: all three exes plus docs.
+          $stage = "hopscout-$V-x64"
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          Copy-Item target/release/hopscout.exe        $stage/
+          Copy-Item target/release/HopScout.exe        $stage/
+          Copy-Item target/release/hopscout-helper.exe $stage/
+          Copy-Item README.md, LICENSE                 $stage/
+          Compress-Archive -Path "$stage/*" -DestinationPath "dist/$stage-portable.zip" -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/*
+
+  release:
+    name: Publish GitHub Release
+    needs: [meta, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: List artifacts
+        run: find artifacts -type f -printf '%s\t%p\n'
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.meta.outputs.tag }}
+          name: hopscout ${{ needs.meta.outputs.tag }}
+          generate_release_notes: true
+          fail_on_unmatched_files: false
+          files: artifacts/**/*

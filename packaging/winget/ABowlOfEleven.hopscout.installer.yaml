@@ -1,0 +1,21 @@
+# winget installer manifest. After a release, set PackageVersion + InstallerUrl
+# to the tag and fill InstallerSha256 with the MSI's SHA-256:
+#   (Get-FileHash hopscout-<version>-x64.msi -Algorithm SHA256).Hash
+PackageIdentifier: ABowlOfEleven.hopscout
+PackageVersion: 0.1.0
+InstallerLocale: en-US
+Platform:
+  - Windows.Desktop
+MinimumOSVersion: 10.0.0.0
+InstallerType: wix
+Scope: user
+InstallModes:
+  - silent
+  - silentWithProgress
+UpgradeBehavior: install
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/ABowlOfEleven/hopscout/releases/download/v0.1.0/hopscout-0.1.0-x64.msi
+    InstallerSha256: 0000000000000000000000000000000000000000000000000000000000000000
+ManifestType: installer
+ManifestVersion: 1.6.0
