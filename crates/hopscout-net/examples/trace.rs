@@ -37,6 +37,15 @@ fn main() -> std::io::Result<()> {
         let local = hopscout_net::local_ipv4_for(d4)?;
         println!("(rung-2 UDP mode, bind {local})\n");
         Arc::new(RawUdpBackendFactory::new(local)?)
+    } else if proto.eq_ignore_ascii_case("tcp") {
+        config.protocol = ProbeProtocol::TcpSyn;
+        let IpAddr::V4(d4) = dest else {
+            eprintln!("TCP mode is IPv4-only");
+            std::process::exit(1);
+        };
+        let local = hopscout_net::local_ipv4_for(d4)?;
+        println!("(rung-3 TCP-SYN mode :443, bind {local})\n");
+        Arc::new(hopscout_net::NpcapTcpBackendFactory::new(d4, 443, local)?)
     } else {
         Arc::new(IcmpBackendFactory)
     };

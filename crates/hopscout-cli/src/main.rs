@@ -14,7 +14,8 @@ use std::time::Duration;
 
 use hopscout_core::{BackendFactory, Engine, EngineConfig, ProbeProtocol};
 use hopscout_net::{
-    IcmpBackendFactory, RawUdpBackendFactory, detect_caps, local_ipv4_for, relaunch_elevated,
+    IcmpBackendFactory, NpcapTcpBackendFactory, RawUdpBackendFactory, detect_caps, local_ipv4_for,
+    relaunch_elevated,
 };
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind};
 
@@ -29,6 +30,7 @@ enum Family {
 enum Proto {
     Icmp,
     Udp,
+    Tcp,
 }
 
 struct Args {
@@ -39,6 +41,7 @@ struct Args {
     size: usize,
     family: Family,
     proto: Proto,
+    port: u16,
 }
 
 fn main() -> io::Result<()> {
@@ -65,9 +68,10 @@ fn main() -> io::Result<()> {
     config.protocol = match args.proto {
         Proto::Icmp => ProbeProtocol::Icmp,
         Proto::Udp => ProbeProtocol::Udp,
+        Proto::Tcp => ProbeProtocol::TcpSyn,
     };
 
-    let Some(factory) = build_factory(args.proto, dest) else {
+    let Some(factory) = build_factory(args.proto, dest, args.port) else {
         return Ok(()); // relaunched elevated, or fatal already reported
     };
 
@@ -119,6 +123,7 @@ fn parse_args() -> Result<Option<Args>, String> {
 
     let mut family = Family::Auto;
     let mut proto = Proto::Icmp;
+    let mut port = 443u16;
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
         match arg.as_str() {
@@ -133,13 +138,15 @@ fn parse_args() -> Result<Option<Args>, String> {
             "-4" => family = Family::V4,
             "-6" => family = Family::V6,
             "-p" | "--proto" => {
-                let v = it.next().ok_or("--proto needs a value (icmp|udp)")?;
+                let v = it.next().ok_or("--proto needs a value (icmp|udp|tcp)")?;
                 proto = match v.to_ascii_lowercase().as_str() {
                     "icmp" => Proto::Icmp,
                     "udp" => Proto::Udp,
-                    other => return Err(format!("unknown proto '{other}' (icmp|udp)")),
+                    "tcp" => Proto::Tcp,
+                    other => return Err(format!("unknown proto '{other}' (icmp|udp|tcp)")),
                 };
             }
+            "-P" | "--port" => port = next_num(&mut it, "port")?,
             "-i" | "--interval" => interval = next_num(&mut it, "interval")?,
             "-w" | "--timeout" => timeout = next_num(&mut it, "timeout")?,
             "-m" | "--max-hops" => max_hops = next_num(&mut it, "max-hops")?,
@@ -167,6 +174,7 @@ fn parse_args() -> Result<Option<Args>, String> {
         size,
         family,
         proto,
+        port,
     }))
 }
 
@@ -191,7 +199,9 @@ fn usage() {
          \x20   -m, --max-hops <n>    maximum TTL to probe          [default: 30]\n\
          \x20   -s, --size     <n>    payload bytes                 [default: 32]\n\
          \x20   -4 / -6               force IPv4 / IPv6             [default: auto]\n\
-         \x20   -p, --proto <p>       icmp | udp (udp needs admin) [default: icmp]\n\
+         \x20   -p, --proto <p>       icmp | udp | tcp             [default: icmp]\n\
+         \x20                         (udp needs admin; tcp needs Npcap + admin)\n\
+         \x20   -P, --port <n>        destination port for tcp    [default: 443]\n\
          \x20   -h, --help            show this help\n\
          \n\
          KEYS:\n    q/Esc quit   p/space pause   r reset"
@@ -200,9 +210,41 @@ fn usage() {
 
 /// Pick the probe backend for the chosen protocol. Returns `None` if we handed
 /// off to an elevated relaunch (caller should exit cleanly).
-fn build_factory(proto: Proto, dest: IpAddr) -> Option<Arc<dyn BackendFactory>> {
+fn build_factory(proto: Proto, dest: IpAddr, port: u16) -> Option<Arc<dyn BackendFactory>> {
     match proto {
         Proto::Icmp => Some(Arc::new(IcmpBackendFactory)),
+        Proto::Tcp => {
+            let IpAddr::V4(d4) = dest else {
+                eprintln!("hopscout: TCP mode is IPv4-only");
+                std::process::exit(1);
+            };
+            let caps = detect_caps();
+            if !caps.rung3() {
+                eprintln!("hopscout: TCP mode (rung 3) needs Npcap — install from https://npcap.com");
+                std::process::exit(1);
+            }
+            if !caps.elevated {
+                eprintln!("hopscout: TCP injection needs admin — relaunching elevated…");
+                match relaunch_elevated() {
+                    Ok(()) => return None,
+                    Err(e) => {
+                        eprintln!("hopscout: elevation failed: {e}");
+                        std::process::exit(1);
+                    }
+                }
+            }
+            let local = local_ipv4_for(d4).unwrap_or_else(|e| {
+                eprintln!("hopscout: could not find local interface: {e}");
+                std::process::exit(1);
+            });
+            match NpcapTcpBackendFactory::new(d4, port, local) {
+                Ok(f) => Some(Arc::new(f)),
+                Err(e) => {
+                    eprintln!("hopscout: TCP backend failed: {e}");
+                    std::process::exit(1);
+                }
+            }
+        }
         Proto::Udp => {
             let IpAddr::V4(d4) = dest else {
                 eprintln!("hopscout: UDP mode is IPv4-only");

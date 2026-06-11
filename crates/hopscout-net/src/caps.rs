@@ -10,6 +10,7 @@ pub fn detect() -> Capabilities {
     Capabilities {
         elevated: is_elevated(),
         raw_icmp: raw_sniffer_available(),
+        npcap: crate::npcap::Npcap::available(),
     }
 }
 

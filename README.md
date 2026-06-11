@@ -5,29 +5,37 @@ elevation required for the default path — with a `ratatui` CLI and an `egui`
 GUI sharing one engine. MTR parity, plus ASN/Geo enrichment, path-change
 alerting, multi-target dashboards, and multipath (Paris) discovery.
 
-> Status: **Phases 1–2 working.** Concurrent rung-1 engine (unprivileged ICMP,
-> IPv4 **and IPv6**), live `ratatui` CLI, `egui` GUI, rDNS + ASN enrichment, and
-> rung-2 **UDP traceroute** via raw sockets with capability detection +
-> self-elevation. Branding (icon, version metadata, About) is in. Rung 3 (Npcap)
-> and Paris multipath are next.
+> Status: **Phases 1–3 working.** All three protocols run: rung-1 **ICMP**
+> (unprivileged, IPv4 + IPv6), rung-2 **UDP** (raw `SIO_RCVALL` sniffer, admin),
+> and rung-3 **TCP-SYN** via Npcap (runtime-loaded, never bundled) with ACK/IP-id
+> correlation. Live `ratatui` CLI, `egui` GUI, rDNS + ASN enrichment, capability
+> detection + self-elevation, and full branding (icon, version metadata, About).
+> Paris multipath visualization and the elevated-helper privilege *separation*
+> are the next refinements.
 
 ## Workspace
 
 | Crate | Role | Unsafe | State |
 |-------|------|--------|-------|
 | `hopscout-core`   | Probe engine, `Session` model, rolling stats, the `ProbeBackend` trait. | forbidden | working |
-| `hopscout-net`    | The single Win32 FFI boundary. Rung-1 ICMP today; raw sockets + Npcap later. | allowed (FFI) | working |
+| `hopscout-net`    | The single Win32 FFI boundary. Rung 1 (ICMP), rung 2 (raw UDP), rung 3 (Npcap TCP-SYN), capability detection, self-elevation. | allowed (FFI) | working |
 | `hopscout-enrich` | Background reverse-DNS + origin-ASN (Team Cymru WHOIS) enrichment. | forbidden | working |
 | `hopscout-cli`    | `ratatui` live trace table. | forbidden | working |
 | `hopscout-gui`    | `egui` app — live table + per-hop sparklines. | forbidden | working |
 
 ## Capability ladder
 
-| Capability | Backend | Privilege |
-|------------|---------|-----------|
-| ICMP trace + ping (IPv4) | `IcmpSendEcho2` | none |
-| rDNS / ASN / GeoIP / map / alerts / multi-target | userspace | none |
-| Sub-floor intervals, jumbo payloads, UDP/TCP modes, Paris multipath | raw socket / Npcap | admin (via an elevated probe helper) |
+| Capability | Backend | Privilege | Status |
+|------------|---------|-----------|--------|
+| ICMP trace + ping (IPv4 + IPv6) | `Icmp[6]SendEcho2` | none | ✅ |
+| rDNS / ASN enrichment | userspace (Cymru WHOIS) | none | ✅ |
+| UDP traceroute | raw `SIO_RCVALL` sniffer | admin | ✅ |
+| TCP-SYN traceroute (trace to `:443`) | Npcap injection | Npcap + admin | ✅ |
+| Paris multipath, GeoIP map, path-change alerts | Npcap / userspace | varies | planned |
+
+Npcap (rung 3) is **runtime-loaded** via `libloading`, never bundled — its
+license restricts redistribution. hopscout builds and runs without the Npcap
+SDK; TCP mode lights up only when Npcap is installed ([npcap.com](https://npcap.com)).
 
 ## Architecture notes
 
@@ -56,8 +64,12 @@ cargo run -p hopscout-cli -- one.one.one.one -i 500 -m 40
 | `-m, --max-hops <n>`  | maximum TTL to probe         | 30 |
 | `-s, --size <n>`      | payload bytes                | 32 |
 | `-4` / `-6`           | force IPv4 / IPv6            | auto |
-| `-p, --proto <p>`     | `icmp` or `udp` (udp needs admin) | icmp |
+| `-p, --proto <p>`     | `icmp` \| `udp` \| `tcp`     | icmp |
+| `-P, --port <n>`      | destination port (tcp mode) | 443 |
 | `-V, --version`       | print version                | — |
+
+`udp` needs admin (raw sniffer); `tcp` needs Npcap + admin (packet injection).
+hopscout detects the gap and relaunches itself elevated.
 
 Keys: `q`/`Esc` quit · `p`/space pause · `r` reset.
 

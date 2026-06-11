@@ -16,6 +16,7 @@ description = "hopscout's Win32 FFI boundary: ICMP (rung 1) today, raw sockets +
 hopscout-core = { version = "0.1.0", path = "../hopscout-core" }
 
 [target.'cfg(windows)'.dependencies]
+libloading = "0.8" # runtime-load Npcap's wpcap.dll (never bundled — license)
 socket2 = { version = "0.6", features = ["all"] } # `all` gates Type::RAW etc.
 windows = { version = "0.62.2", features = [
     "Win32_Foundation",

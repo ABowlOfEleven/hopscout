@@ -15,7 +15,15 @@ mod elevate;
 #[cfg(windows)]
 mod icmp;
 #[cfg(windows)]
+mod iface;
+#[cfg(windows)]
+mod npcap;
+#[cfg(windows)]
+mod packet;
+#[cfg(windows)]
 mod raw;
+#[cfg(windows)]
+mod tcp;
 
 #[cfg(windows)]
 pub use caps::detect as detect_caps;
@@ -24,6 +32,10 @@ pub use elevate::relaunch_elevated;
 #[cfg(windows)]
 pub use icmp::{IcmpBackend, IcmpBackendFactory};
 #[cfg(windows)]
+pub use npcap::Npcap;
+#[cfg(windows)]
 pub use raw::{IcmpReceiver, RawUdpBackend, RawUdpBackendFactory, local_ipv4_for};
+#[cfg(windows)]
+pub use tcp::NpcapTcpBackendFactory;
 
 pub use hopscout_core::Capabilities;
