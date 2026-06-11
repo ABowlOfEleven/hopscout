@@ -34,7 +34,7 @@ const RCVALL_ON: u32 = 1;
 use hopscout_core::{BackendFactory, ProbeBackend, ProbeOutcome, ProbeRequest, ProbeResponse};
 
 const BASE_PORT: u16 = 33434; // classic traceroute UDP base
-const PORT_SPAN: u16 = 4000; // size of the unique-destination-port window
+const FLOW_SPAN: u16 = 512; // dest-port window per flow (flow N uses its own band)
 
 #[derive(Clone, Copy, PartialEq)]
 enum IcmpKind {
@@ -79,10 +79,13 @@ impl IcmpReceiver {
         }))
     }
 
-    /// A unique destination port within the correlation window.
-    fn alloc_port(&self) -> u16 {
+    /// A unique destination port inside `flow`'s band. Different flows land in
+    /// different port ranges, so ECMP hashes route them down different paths.
+    fn alloc_port(&self, flow: u16) -> u16 {
         let n = self.next.fetch_add(1, Ordering::Relaxed);
-        BASE_PORT + (n % PORT_SPAN as u32) as u16
+        BASE_PORT
+            .wrapping_add(flow.wrapping_mul(FLOW_SPAN))
+            .wrapping_add((n % FLOW_SPAN as u32) as u16)
     }
 
     fn register(&self, port: u16) -> Receiver<(IpAddr, IcmpKind)> {
@@ -229,7 +232,7 @@ impl ProbeBackend for RawUdpBackend {
             ));
         };
 
-        let port = self.rx.alloc_port();
+        let port = self.rx.alloc_port(req.flow_id);
         let waiter = self.rx.register(port);
 
         let send = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0))?;

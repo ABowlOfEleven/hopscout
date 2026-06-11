@@ -66,6 +66,7 @@ struct HopscoutApp {
     max_hops: u8,
     proto: ProbeProtocol,
     port: u16,
+    flows: u8,
     view: View,
     monitors: Vec<Monitor>,
     active: Option<usize>,
@@ -82,6 +83,7 @@ impl HopscoutApp {
             max_hops: 30,
             proto: ProbeProtocol::Icmp,
             port: 443,
+            flows: 1,
             view: View::Table,
             monitors: Vec::new(),
             active: None,
@@ -111,6 +113,7 @@ impl HopscoutApp {
         config.interval = Duration::from_millis(self.interval_ms.max(1));
         config.max_hops = self.max_hops.max(1);
         config.protocol = self.proto;
+        config.flows = self.flows.max(1);
 
         let factory = match make_factory(self.proto, dest, self.port) {
             Ok(f) => f,
@@ -193,6 +196,8 @@ impl HopscoutApp {
                 ui.add(egui::DragValue::new(&mut self.interval_ms).suffix(" ms").range(1..=60_000));
                 ui.label("hops");
                 ui.add(egui::DragValue::new(&mut self.max_hops).range(1..=64));
+                ui.label("flows");
+                ui.add(egui::DragValue::new(&mut self.flows).range(1..=8));
 
                 if ui.button("Add target").clicked() || enter {
                     self.add_target();

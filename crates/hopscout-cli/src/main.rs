@@ -39,6 +39,7 @@ struct Args {
     family: Family,
     proto: Proto,
     port: u16,
+    flows: u8,
 }
 
 fn main() -> io::Result<()> {
@@ -62,6 +63,7 @@ fn main() -> io::Result<()> {
     config.timeout = args.timeout;
     config.max_hops = args.max_hops;
     config.payload_size = args.size;
+    config.flows = args.flows.max(1);
     config.protocol = match args.proto {
         Proto::Icmp => ProbeProtocol::Icmp,
         Proto::Udp => ProbeProtocol::Udp,
@@ -128,6 +130,7 @@ fn parse_args() -> Result<Option<Args>, String> {
     let mut family = Family::Auto;
     let mut proto = Proto::Icmp;
     let mut port = 443u16;
+    let mut flows = 1u8;
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
         match arg.as_str() {
@@ -151,6 +154,7 @@ fn parse_args() -> Result<Option<Args>, String> {
                 };
             }
             "-P" | "--port" => port = next_num(&mut it, "port")?,
+            "-f" | "--flows" => flows = next_num(&mut it, "flows")?,
             "-i" | "--interval" => interval = next_num(&mut it, "interval")?,
             "-w" | "--timeout" => timeout = next_num(&mut it, "timeout")?,
             "-m" | "--max-hops" => max_hops = next_num(&mut it, "max-hops")?,
@@ -179,6 +183,7 @@ fn parse_args() -> Result<Option<Args>, String> {
         family,
         proto,
         port,
+        flows,
     }))
 }
 
@@ -206,6 +211,7 @@ fn usage() {
          \x20   -p, --proto <p>       icmp | udp | tcp             [default: icmp]\n\
          \x20                         (udp needs admin; tcp needs Npcap + admin)\n\
          \x20   -P, --port <n>        destination port for tcp    [default: 443]\n\
+         \x20   -f, --flows <n>       concurrent flows (multipath) [default: 1]\n\
          \x20   -h, --help            show this help\n\
          \n\
          KEYS:\n    q/Esc quit   p/space pause   r reset"

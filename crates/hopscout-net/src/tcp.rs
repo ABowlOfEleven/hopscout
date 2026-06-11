@@ -78,11 +78,14 @@ impl ProbeBackend for NpcapTcpBackend {
     ) -> io::Result<ProbeResponse> {
         let s = &self.shared;
         let ip_id = s.ip_id.fetch_add(1, Ordering::Relaxed).max(1);
+        // Each flow gets its own source port → its own stable 4-tuple (Paris),
+        // so flows diverge through ECMP while staying internally consistent.
+        let src_port = s.src_port.wrapping_add(req.flow_id);
 
         let syn = TcpSyn {
             src_ip: s.src_ip,
             dst_ip: s.dst_ip,
-            src_port: s.src_port,
+            src_port,
             dst_port: s.dst_port,
             seq: 0x1000_0000 | ip_id as u32,
             ttl: req.ttl,
@@ -160,10 +163,11 @@ fn parse_reply(frame: &[u8], ip_id: u16, s: &Shared) -> Option<(ProbeOutcome, Ip
             if tcp.len() < 12 {
                 return None;
             }
-            let dport = u16::from_be_bytes([tcp[2], tcp[3]]);
+            // Correlate by ACK only: the source port now varies per flow, but the
+            // ACK echoes our SYN seq + 1, which uniquely encodes this probe's IP id.
             let ack = u32::from_be_bytes([tcp[8], tcp[9], tcp[10], tcp[11]]);
             let expected_ack = (0x1000_0000u32 | ip_id as u32).wrapping_add(1);
-            (dport == s.src_port && ack == expected_ack).then_some((ProbeOutcome::Reply, src))
+            (ack == expected_ack).then_some((ProbeOutcome::Reply, src))
         }
         _ => None,
     }

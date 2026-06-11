@@ -5,13 +5,14 @@ elevation required for the default path — with a `ratatui` CLI and an `egui`
 GUI sharing one engine. MTR parity, plus ASN/Geo enrichment, path-change
 alerting, multi-target dashboards, and multipath (Paris) discovery.
 
-> Status: **Phases 1–3 working.** All three protocols run: rung-1 **ICMP**
-> (unprivileged, IPv4 + IPv6), rung-2 **UDP** (raw `SIO_RCVALL` sniffer, admin),
-> and rung-3 **TCP-SYN** via Npcap (runtime-loaded, never bundled) with ACK/IP-id
-> correlation. Live `ratatui` CLI, `egui` GUI, rDNS + ASN enrichment, capability
-> detection + self-elevation, and full branding (icon, version metadata, About).
-> Paris multipath visualization and the elevated-helper privilege *separation*
-> are the next refinements.
+> Status: **Feature-complete core.** All three protocols (rung-1 **ICMP**
+> unprivileged IPv4+IPv6, rung-2 **UDP** via raw `SIO_RCVALL`, rung-3 **TCP-SYN**
+> via runtime-loaded Npcap), **active multipath** (per-flow ECMP discovery),
+> **path-change alerting**, a **multi-target dashboard**, and GeoIP map +
+> topology DAG views. Live `ratatui` CLI and `egui` GUI over one engine, with
+> rDNS/ASN/geo enrichment, capability detection + self-elevation, and full
+> branding. The privilege-*separation* helper (vs current self-elevation) and
+> map coastlines remain as polish.
 
 ## Workspace
 
@@ -31,7 +32,8 @@ alerting, multi-target dashboards, and multipath (Paris) discovery.
 | rDNS / ASN enrichment | userspace (Cymru WHOIS) | none | ✅ |
 | UDP traceroute | raw `SIO_RCVALL` sniffer | admin | ✅ |
 | TCP-SYN traceroute (trace to `:443`) | Npcap injection | Npcap + admin | ✅ |
-| Paris multipath, GeoIP map, path-change alerts | Npcap / userspace | varies | planned |
+| Active multipath (per-flow ECMP) | UDP/TCP flow tuples | per protocol | ✅ |
+| GeoIP map · topology DAG · path-change alerts · multi-target | userspace | none | ✅ |
 
 Npcap (rung 3) is **runtime-loaded** via `libloading`, never bundled — its
 license restricts redistribution. hopscout builds and runs without the Npcap
@@ -66,6 +68,7 @@ cargo run -p hopscout-cli -- one.one.one.one -i 500 -m 40
 | `-4` / `-6`           | force IPv4 / IPv6            | auto |
 | `-p, --proto <p>`     | `icmp` \| `udp` \| `tcp`     | icmp |
 | `-P, --port <n>`      | destination port (tcp mode) | 443 |
+| `-f, --flows <n>`     | concurrent flows (multipath) | 1 |
 | `-V, --version`       | print version                | — |
 
 `udp` needs admin (raw sniffer); `tcp` needs Npcap + admin (packet injection).
@@ -90,9 +93,11 @@ Pick a protocol (ICMP/UDP/TCP) and port, enter a host, press Start. Three views:
 
 - **Table** — live loss/RTT/jitter with rDNS + ASN; click a hop for its sparkline.
 - **Map** — hops plotted by geolocation on an equirectangular grid, path arcs + city labels.
-- **Topology** — TTL columns of hop addresses with ASN coloring; multiple nodes in a column reveal ECMP/multipath.
+- **Topology** — TTL columns of hop addresses with ASN coloring; with `flows > 1` each flow draws its own polyline, so ECMP fan-out and reconvergence are visible.
+- **Alerts** — capture a baseline, then watch live deviations (route change, hop appear/disappear, latency regression, loss onset).
 
-Pause/Resume/Reset from the top bar; UDP/TCP prompt to relaunch elevated when needed.
+Add several targets to monitor them side by side (left panel). Set `flows` for
+multipath. Pause/Resume/Reset and UDP/TCP elevation prompts from the top bar.
 
 ### Headless smoke trace
 

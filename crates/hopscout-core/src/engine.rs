@@ -33,6 +33,10 @@ pub struct EngineConfig {
     pub timeout: Duration,
     pub payload_size: usize,
     pub protocol: ProbeProtocol,
+    /// Number of concurrent probe flows. `1` is a plain trace; higher values
+    /// spread probes across flow tuples to discover ECMP multipath (one worker
+    /// set per flow, so cost is `flows × max_hops` threads).
+    pub flows: u8,
 }
 
 impl EngineConfig {
@@ -44,6 +48,7 @@ impl EngineConfig {
             timeout: Duration::from_secs(1),
             payload_size: 32,
             protocol: ProbeProtocol::Icmp,
+            flows: 1,
         }
     }
 }
@@ -71,21 +76,25 @@ impl Engine {
         let paused = Arc::new(AtomicBool::new(false));
         let path_len = Arc::new(AtomicU8::new(config.max_hops));
 
-        let mut workers = Vec::with_capacity(config.max_hops as usize);
-        for ttl in 1..=config.max_hops {
-            let backend = factory.create()?;
-            let ctx = WorkerCtx {
-                ttl,
-                config: config.clone(),
-                session: Arc::clone(&session),
-                stop: Arc::clone(&stop),
-                paused: Arc::clone(&paused),
-                path_len: Arc::clone(&path_len),
-            };
-            let handle = thread::Builder::new()
-                .name(format!("hopscout-hop-{ttl}"))
-                .spawn(move || hop_loop(ctx, backend))?;
-            workers.push(handle);
+        let flows = config.flows.max(1);
+        let mut workers = Vec::with_capacity(config.max_hops as usize * flows as usize);
+        for flow in 0..flows as u16 {
+            for ttl in 1..=config.max_hops {
+                let backend = factory.create()?;
+                let ctx = WorkerCtx {
+                    flow,
+                    ttl,
+                    config: config.clone(),
+                    session: Arc::clone(&session),
+                    stop: Arc::clone(&stop),
+                    paused: Arc::clone(&paused),
+                    path_len: Arc::clone(&path_len),
+                };
+                let handle = thread::Builder::new()
+                    .name(format!("hopscout-f{flow}-h{ttl}"))
+                    .spawn(move || hop_loop(ctx, backend))?;
+                workers.push(handle);
+            }
         }
 
         Ok(Self {
@@ -152,6 +161,7 @@ impl Drop for Engine {
 }
 
 struct WorkerCtx {
+    flow: u16,
     ttl: u8,
     config: EngineConfig,
     session: Arc<Mutex<Session>>,
@@ -175,6 +185,7 @@ fn hop_loop(ctx: WorkerCtx, backend: Box<dyn ProbeBackend + Send>) {
             seq,
             protocol: ctx.config.protocol,
             payload_size: ctx.config.payload_size,
+            flow_id: ctx.flow,
         };
         seq = seq.wrapping_add(1);
 
@@ -190,6 +201,9 @@ fn hop_loop(ctx: WorkerCtx, backend: Box<dyn ProbeBackend + Send>) {
                 }
                 let mut s = ctx.session.lock().unwrap();
                 s.on_response(&resp);
+                if let Some(addr) = resp.from {
+                    s.record_path(ctx.flow as usize, ctx.ttl, addr);
+                }
                 if reached {
                     s.note_reached(ctx.ttl);
                 }

@@ -17,6 +17,7 @@ fn main() -> std::io::Result<()> {
     let target = args.next().unwrap_or_else(|| "8.8.8.8".to_string());
     let secs: u64 = args.next().and_then(|s| s.parse().ok()).unwrap_or(4);
     let proto = args.next().unwrap_or_default();
+    let flows: u8 = args.next().and_then(|s| s.parse().ok()).unwrap_or(1);
 
     let Some(dest) = resolve(&target) else {
         eprintln!("could not resolve an IPv4 address for '{target}'");
@@ -27,6 +28,7 @@ fn main() -> std::io::Result<()> {
 
     let mut config = EngineConfig::new(dest);
     config.interval = Duration::from_millis(500);
+    config.flows = flows.max(1);
 
     let factory: Arc<dyn BackendFactory> = if proto.eq_ignore_ascii_case("udp") {
         config.protocol = ProbeProtocol::Udp;
@@ -82,10 +84,26 @@ fn main() -> std::io::Result<()> {
         );
     }
     enricher.stop();
-    println!(
-        "\npath_len = {:?} (destination hop)",
-        s.path_len
-    );
+    println!("\npath_len = {:?} (destination hop)", s.path_len);
+
+    if flows > 1 {
+        println!("\nper-flow paths (last two octets):");
+        for (fi, path) in s.paths.iter().enumerate() {
+            let row: Vec<String> = path
+                .iter()
+                .take(s.visible_hops())
+                .map(|slot| match slot {
+                    Some(std::net::IpAddr::V4(v4)) => {
+                        let o = v4.octets();
+                        format!("{}.{}", o[2], o[3])
+                    }
+                    Some(other) => other.to_string(),
+                    None => "*".to_string(),
+                })
+                .collect();
+            println!("  flow {fi}: {}", row.join(" → "));
+        }
+    }
 
     engine.stop();
     Ok(())

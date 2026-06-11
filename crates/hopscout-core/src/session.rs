@@ -68,6 +68,10 @@ pub struct Session {
     /// TTL at which the destination first replied, once known. Frontends render
     /// hops `1..=path_len`; below that we're still discovering.
     pub path_len: Option<u8>,
+    /// Per-flow observed path: `paths[flow][ttl-1]` is the last address that flow
+    /// saw at that TTL. Distinct flows that diverge reveal multipath; the
+    /// topology view draws one polyline per flow.
+    pub paths: Vec<Vec<Option<IpAddr>>>,
 }
 
 impl Session {
@@ -104,6 +108,19 @@ impl Session {
     /// the shortest TTL that reaches it.
     pub fn note_reached(&mut self, ttl: u8) {
         self.path_len = Some(self.path_len.map_or(ttl, |p| p.min(ttl)));
+    }
+
+    /// Record the address a given `flow` saw at `ttl` (for the topology view).
+    pub fn record_path(&mut self, flow: usize, ttl: u8, addr: IpAddr) {
+        if self.paths.len() <= flow {
+            self.paths.resize(flow + 1, Vec::new());
+        }
+        let path = &mut self.paths[flow];
+        let idx = (ttl as usize).saturating_sub(1);
+        if path.len() <= idx {
+            path.resize(idx + 1, None);
+        }
+        path[idx] = Some(addr);
     }
 
     /// Number of hops worth displaying right now.

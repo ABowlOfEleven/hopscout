@@ -26,6 +26,10 @@ pub struct ProbeRequest {
     pub seq: u64,
     pub protocol: ProbeProtocol,
     pub payload_size: usize,
+    /// Which probe flow this belongs to. Backends fold it into the flow tuple
+    /// (UDP dest-port band / TCP source port) so distinct flows take distinct
+    /// paths through ECMP load balancers — the basis for multipath discovery.
+    pub flow_id: u16,
 }
 
 /// How a single probe turned out.

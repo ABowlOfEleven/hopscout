@@ -1,18 +1,26 @@
-//! Topology view: hops laid out as TTL columns, one node per observed address.
-//! A hop that shows more than one address is an ECMP fan-out (multipath). Edges
-//! connect every node in column N to column N+1 — we don't track which address
-//! fed which next hop, so all observed transitions are drawn. Nodes are colored
-//! by origin ASN, so you can see where the path crosses networks.
+//! Topology view. Hops are laid out as TTL columns, one node per observed
+//! address (a column with several nodes is an ECMP fan-out). When multiple
+//! flows are probed, each flow's path is drawn as its own colored polyline, so
+//! divergence and reconvergence through load balancers are visible. Nodes are
+//! colored by origin ASN — line color = which flow, node color = which network.
 
+use std::collections::HashMap;
 use std::net::IpAddr;
 
 use egui::{Align2, Color32, FontId};
 use hopscout_core::Session;
 
 const BG: Color32 = Color32::from_rgb(18, 24, 34);
-const EDGE: Color32 = Color32::from_rgb(46, 56, 72);
 const LABEL: Color32 = Color32::from_rgb(205, 214, 224);
 const MUTED: Color32 = Color32::from_rgb(120, 130, 145);
+const FLOW_COLORS: [Color32; 6] = [
+    Color32::from_rgb(57, 217, 138),
+    Color32::from_rgb(90, 170, 230),
+    Color32::from_rgb(230, 170, 80),
+    Color32::from_rgb(210, 110, 200),
+    Color32::from_rgb(120, 210, 210),
+    Color32::from_rgb(230, 120, 110),
+];
 
 pub fn show(ui: &mut egui::Ui, session: &Session) {
     let n = session.visible_hops();
@@ -38,37 +46,34 @@ pub fn show(ui: &mut egui::Ui, session: &Session) {
     } else {
         0.0
     };
+    let y_for = |j: usize, m: usize| {
+        let t = if m > 1 { j as f32 / (m as f32 - 1.0) } else { 0.5 };
+        inner.top() + inner.height() * (0.15 + 0.7 * t)
+    };
 
-    // Build each TTL column's node positions.
-    let mut cols: Vec<Vec<(egui::Pos2, String, Color32)>> = Vec::with_capacity(n);
+    // One node position per (column, address) from the union of observed addrs.
+    let mut node_pos: HashMap<(usize, IpAddr), egui::Pos2> = HashMap::new();
     for i in 0..n {
-        let hop = &session.hops[i];
+        let addrs = &session.hops[i].addrs;
         let x = inner.left() + col_dx * i as f32;
-        let color = asn_color(hop.meta.asn);
-        let mut nodes = Vec::new();
-        if hop.addrs.is_empty() {
-            nodes.push((egui::pos2(x, inner.center().y), "*".to_string(), MUTED));
-        } else {
-            let m = hop.addrs.len();
-            for (j, addr) in hop.addrs.iter().enumerate() {
-                let t = if m > 1 {
-                    j as f32 / (m as f32 - 1.0)
-                } else {
-                    0.5
-                };
-                let y = inner.top() + inner.height() * (0.15 + 0.7 * t);
-                nodes.push((egui::pos2(x, y), short_addr(addr), color));
-            }
+        for (j, addr) in addrs.iter().enumerate() {
+            node_pos.insert((i, *addr), egui::pos2(x, y_for(j, addrs.len())));
         }
-        cols.push(nodes);
     }
 
-    // Edges between consecutive columns.
-    let edge = egui::Stroke::new(1.0, EDGE);
-    for w in cols.windows(2) {
-        for a in &w[0] {
-            for b in &w[1] {
-                painter.line_segment([a.0, b.0], edge);
+    // Per-flow polylines: connect consecutive responding TTLs for each flow.
+    for (fi, path) in session.paths.iter().enumerate() {
+        let stroke = egui::Stroke::new(1.6, FLOW_COLORS[fi % FLOW_COLORS.len()]);
+        let mut prev: Option<egui::Pos2> = None;
+        for (i, slot) in path.iter().take(n).enumerate() {
+            match slot.and_then(|addr| node_pos.get(&(i, addr)).copied()) {
+                Some(pos) => {
+                    if let Some(p) = prev {
+                        painter.line_segment([p, pos], stroke);
+                    }
+                    prev = Some(pos);
+                }
+                None => prev = None, // non-responding hop breaks the line
             }
         }
     }
@@ -76,7 +81,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session) {
     // TTL headers + nodes + labels.
     let label_font = FontId::monospace(10.0);
     let ttl_font = FontId::proportional(10.0);
-    for (i, col) in cols.iter().enumerate() {
+    for i in 0..n {
         let x = inner.left() + col_dx * i as f32;
         painter.text(
             egui::pos2(x, rect.top() + 12.0),
@@ -85,21 +90,37 @@ pub fn show(ui: &mut egui::Ui, session: &Session) {
             ttl_font.clone(),
             MUTED,
         );
-        let fan = col.len() > 1;
-        for (pos, label, color) in col {
-            painter.circle_filled(*pos, if fan { 6.0 } else { 5.0 }, *color);
+        let hop = &session.hops[i];
+        if hop.addrs.is_empty() {
+            painter.circle_filled(egui::pos2(x, y_for(0, 1)), 4.0, MUTED);
+            continue;
+        }
+        let color = asn_color(hop.meta.asn);
+        let fan = hop.addrs.len() > 1;
+        for addr in &hop.addrs {
+            let pos = node_pos[&(i, *addr)];
+            painter.circle_filled(pos, if fan { 6.0 } else { 5.0 }, color);
             painter.text(
-                *pos + egui::vec2(0.0, 10.0),
+                pos + egui::vec2(0.0, 10.0),
                 Align2::CENTER_TOP,
-                label,
+                short_addr(addr),
                 label_font.clone(),
                 LABEL,
             );
         }
     }
+
+    if session.paths.len() > 1 {
+        painter.text(
+            egui::pos2(rect.right() - 8.0, rect.top() + 12.0),
+            Align2::RIGHT_CENTER,
+            format!("{} flows", session.paths.len()),
+            ttl_font,
+            MUTED,
+        );
+    }
 }
 
-/// Short node label: last two octets (v4) or final group (v6).
 fn short_addr(a: &IpAddr) -> String {
     match a {
         IpAddr::V4(v4) => {
@@ -110,7 +131,6 @@ fn short_addr(a: &IpAddr) -> String {
     }
 }
 
-/// Stable, distinct-ish color per ASN (gray when unknown).
 fn asn_color(asn: Option<u32>) -> Color32 {
     match asn {
         None => MUTED,
