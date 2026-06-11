@@ -31,7 +31,9 @@ use windows::Win32::Networking::WinSock::{SOCKET, WSAIoctl};
 const SIO_RCVALL: u32 = 0x9800_0001;
 const RCVALL_ON: u32 = 1;
 
-use hopscout_core::{BackendFactory, ProbeBackend, ProbeOutcome, ProbeRequest, ProbeResponse};
+use hopscout_core::{
+    BackendFactory, MplsLabel, ProbeBackend, ProbeOutcome, ProbeRequest, ProbeResponse,
+};
 
 const BASE_PORT: u16 = 33434; // classic traceroute UDP base
 const FLOW_SPAN: u16 = 512; // dest-port window per flow (flow N uses its own band)
@@ -44,7 +46,7 @@ enum IcmpKind {
 }
 
 struct Shared {
-    waiters: Mutex<HashMap<u16, SyncSender<(IpAddr, IcmpKind)>>>,
+    waiters: Mutex<HashMap<u16, SyncSender<(IpAddr, IcmpKind, Vec<MplsLabel>)>>>,
     stop: AtomicBool,
 }
 
@@ -88,7 +90,7 @@ impl IcmpReceiver {
             .wrapping_add((n % FLOW_SPAN as u32) as u16)
     }
 
-    fn register(&self, port: u16) -> Receiver<(IpAddr, IcmpKind)> {
+    fn register(&self, port: u16) -> Receiver<(IpAddr, IcmpKind, Vec<MplsLabel>)> {
         let (tx, rx) = sync_channel(1);
         self.shared.waiters.lock().unwrap().insert(port, tx);
         rx
@@ -173,17 +175,17 @@ fn reader_loop(socket: Socket, shared: Arc<Shared>) {
             Some(SocketAddr::V4(s)) => IpAddr::V4(*s.ip()),
             _ => continue,
         };
-        if let Some((kind, port)) = parse_icmp_v4(bytes) {
+        if let Some((kind, port, mpls)) = parse_icmp_v4(bytes) {
             if let Some(tx) = shared.waiters.lock().unwrap().get(&port) {
-                let _ = tx.try_send((responder, kind));
+                let _ = tx.try_send((responder, kind, mpls));
             }
         }
     }
 }
 
-/// Parse a raw IPv4 ICMP datagram, returning the error kind and the original
-/// UDP destination port (our correlation key) for time-exceeded / unreachable.
-fn parse_icmp_v4(buf: &[u8]) -> Option<(IcmpKind, u16)> {
+/// Parse a raw IPv4 ICMP datagram, returning the error kind, the original UDP
+/// destination port (our correlation key), and any MPLS labels (RFC 4950).
+fn parse_icmp_v4(buf: &[u8]) -> Option<(IcmpKind, u16, Vec<MplsLabel>)> {
     if buf.len() < 20 || buf[9] != 1 {
         return None; // not enough bytes, or outer protocol isn't ICMP
     }
@@ -210,7 +212,7 @@ fn parse_icmp_v4(buf: &[u8]) -> Option<(IcmpKind, u16)> {
         return None;
     }
     let dport = u16::from_be_bytes([udp[2], udp[3]]);
-    Some((kind, dport))
+    Some((kind, dport, crate::ext::parse_mpls(icmp)))
 }
 
 /// Per-hop UDP probe backend sharing one [`IcmpReceiver`].
@@ -250,7 +252,7 @@ impl ProbeBackend for RawUdpBackend {
         self.rx.unregister(port);
 
         Ok(match outcome {
-            Ok((responder, kind)) => {
+            Ok((responder, kind, mpls)) => {
                 let rtt = start.elapsed();
                 let outcome = match kind {
                     IcmpKind::TimeExceeded => ProbeOutcome::TtlExceeded,
@@ -263,15 +265,16 @@ impl ProbeBackend for RawUdpBackend {
                     outcome,
                     from: Some(responder),
                     rtt: Some(rtt),
+                    mpls,
                 }
             }
-            Err(_) => ProbeResponse {
-                ttl: req.ttl,
-                seq: req.seq,
-                outcome: ProbeOutcome::Timeout,
-                from: None,
-                rtt: None,
-            },
+            Err(_) => ProbeResponse::new(
+                req.ttl,
+                req.seq,
+                ProbeOutcome::Timeout,
+                None,
+                None,
+            ),
         })
     }
 }
@@ -329,7 +332,7 @@ mod tests {
         pkt[udp + 2] = (33500u16 >> 8) as u8;
         pkt[udp + 3] = (33500u16 & 0xff) as u8;
 
-        let (kind, port) = parse_icmp_v4(&pkt).expect("should parse");
+        let (kind, port, _mpls) = parse_icmp_v4(&pkt).expect("should parse");
         assert!(matches!(kind, IcmpKind::TimeExceeded));
         assert_eq!(port, 33500);
     }

@@ -118,7 +118,7 @@ fn decode_resp(b: &[u8; RESP_LEN], ttl: u8, seq: u64) -> ProbeResponse {
     // decoder doesn't depend on the from-address byte.
     let rtt = (!matches!(outcome, ProbeOutcome::Timeout))
         .then(|| Duration::from_millis(rtt_ms as u64));
-    ProbeResponse { ttl, seq, outcome, from, rtt }
+    ProbeResponse::new(ttl, seq, outcome, from, rtt)
 }
 
 // ---------------------------------------------------------------------------
@@ -270,13 +270,13 @@ mod tests {
 
     #[test]
     fn resp_roundtrip() {
-        let resp = ProbeResponse {
-            ttl: 9,
-            seq: 5,
-            outcome: ProbeOutcome::TtlExceeded,
-            from: Some(IpAddr::V4(Ipv4Addr::new(192, 168, 0, 1))),
-            rtt: Some(Duration::from_millis(12)),
-        };
+        let resp = ProbeResponse::new(
+            9,
+            5,
+            ProbeOutcome::TtlExceeded,
+            Some(IpAddr::V4(Ipv4Addr::new(192, 168, 0, 1))),
+            Some(Duration::from_millis(12)),
+        );
         let d = decode_resp(&encode_resp(&resp), 9, 5);
         assert!(matches!(d.outcome, ProbeOutcome::TtlExceeded));
         assert_eq!(d.from, Some(IpAddr::V4(Ipv4Addr::new(192, 168, 0, 1))));

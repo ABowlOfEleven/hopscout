@@ -19,6 +19,6 @@ pub use alert::{Alert, Baseline};
 pub use backend::{BackendFactory, ProbeBackend};
 pub use caps::Capabilities;
 pub use engine::{Engine, EngineConfig};
-pub use model::{ProbeOutcome, ProbeProtocol, ProbeRequest, ProbeResponse};
+pub use model::{MplsLabel, ProbeOutcome, ProbeProtocol, ProbeRequest, ProbeResponse};
 pub use session::{Hop, HopMeta, Session};
 pub use stats::HopStat;

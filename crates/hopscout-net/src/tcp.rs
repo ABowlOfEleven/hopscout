@@ -101,28 +101,34 @@ impl ProbeBackend for NpcapTcpBackend {
             let Some(frame) = self.capture.next_frame()? else {
                 continue;
             };
-            if let Some((outcome, from)) = parse_reply(&frame, ip_id, s) {
+            if let Some((outcome, from, mpls)) = parse_reply(&frame, ip_id, s) {
                 return Ok(ProbeResponse {
                     ttl: req.ttl,
                     seq: req.seq,
                     outcome,
                     from: Some(IpAddr::V4(from)),
                     rtt: Some(start.elapsed()),
+                    mpls,
                 });
             }
         }
-        Ok(ProbeResponse {
-            ttl: req.ttl,
-            seq: req.seq,
-            outcome: ProbeOutcome::Timeout,
-            from: None,
-            rtt: None,
-        })
+        Ok(ProbeResponse::new(
+            req.ttl,
+            req.seq,
+            ProbeOutcome::Timeout,
+            None,
+            None,
+        ))
     }
 }
 
-/// Match a captured Ethernet frame to our probe (`ip_id`), returning the hop.
-fn parse_reply(frame: &[u8], ip_id: u16, s: &Shared) -> Option<(ProbeOutcome, Ipv4Addr)> {
+/// Match a captured Ethernet frame to our probe (`ip_id`), returning the hop and
+/// any MPLS labels from the ICMP extension.
+fn parse_reply(
+    frame: &[u8],
+    ip_id: u16,
+    s: &Shared,
+) -> Option<(ProbeOutcome, Ipv4Addr, Vec<hopscout_core::MplsLabel>)> {
     if frame.len() < 14 + 20 || frame[12] != 0x08 || frame[13] != 0x00 {
         return None; // not an IPv4 Ethernet frame
     }
@@ -150,7 +156,7 @@ fn parse_reply(frame: &[u8], ip_id: u16, s: &Shared) -> Option<(ProbeOutcome, Ip
                 return None;
             }
             let inner_id = u16::from_be_bytes([inner[4], inner[5]]);
-            (inner_id == ip_id).then_some((outcome, src))
+            (inner_id == ip_id).then(|| (outcome, src, crate::ext::parse_mpls(icmp)))
         }
         6 => {
             // A SYN-ACK / RST from the destination = reached. The 4-tuple is
@@ -167,7 +173,7 @@ fn parse_reply(frame: &[u8], ip_id: u16, s: &Shared) -> Option<(ProbeOutcome, Ip
             // ACK echoes our SYN seq + 1, which uniquely encodes this probe's IP id.
             let ack = u32::from_be_bytes([tcp[8], tcp[9], tcp[10], tcp[11]]);
             let expected_ack = (0x1000_0000u32 | ip_id as u32).wrapping_add(1);
-            (ack == expected_ack).then_some((ProbeOutcome::Reply, src))
+            (ack == expected_ack).then_some((ProbeOutcome::Reply, src, Vec::new()))
         }
         _ => None,
     }

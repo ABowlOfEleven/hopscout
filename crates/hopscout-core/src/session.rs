@@ -5,7 +5,7 @@
 use std::collections::VecDeque;
 use std::net::IpAddr;
 
-use crate::model::ProbeResponse;
+use crate::model::{MplsLabel, ProbeResponse};
 use crate::stats::HopStat;
 
 /// How many recent samples each hop keeps for sparkline rendering.
@@ -38,6 +38,8 @@ pub struct Hop {
     pub recent: VecDeque<Option<f32>>,
     /// Enrichment for the primary (first) address.
     pub meta: HopMeta,
+    /// Most recent MPLS label stack seen at this hop (empty if none).
+    pub mpls: Vec<MplsLabel>,
 }
 
 impl Hop {
@@ -94,6 +96,9 @@ impl Session {
         let hop = self.hop_mut(resp.ttl);
         if let Some(addr) = resp.from {
             hop.note_addr(addr);
+        }
+        if !resp.mpls.is_empty() {
+            hop.mpls = resp.mpls.clone();
         }
         match resp.rtt {
             Some(rtt) => {

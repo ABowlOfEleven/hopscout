@@ -47,6 +47,7 @@ pub struct Args {
     no_dns: bool,
     show_ips: bool,
     wide: bool,
+    mpls: bool,
 }
 
 fn main() -> io::Result<()> {
@@ -98,7 +99,7 @@ fn main() -> io::Result<()> {
     let enricher = hopscout_enrich::spawn_with(engine.session(), !args.no_dns);
 
     let result = match args.mode {
-        Mode::Interactive => run_tui(&engine, &args.target, &config),
+        Mode::Interactive => run_tui(&engine, &args.target, &config, args.mpls),
         Mode::Report | Mode::Json | Mode::Csv => run_report(&engine, &args, &config),
         Mode::Mtu => Ok(()),
     };
@@ -109,9 +110,14 @@ fn main() -> io::Result<()> {
 }
 
 /// The interactive full-screen view.
-fn run_tui(engine: &Engine, target_label: &str, config: &EngineConfig) -> io::Result<()> {
+fn run_tui(
+    engine: &Engine,
+    target_label: &str,
+    config: &EngineConfig,
+    show_mpls: bool,
+) -> io::Result<()> {
     let mut terminal = ratatui::init();
-    let out = tui_loop(&mut terminal, engine, target_label, config);
+    let out = tui_loop(&mut terminal, engine, target_label, config, show_mpls);
     ratatui::restore();
     out
 }
@@ -121,6 +127,7 @@ fn tui_loop(
     engine: &Engine,
     target_label: &str,
     config: &EngineConfig,
+    show_mpls: bool,
 ) -> io::Result<()> {
     let mut baseline: Option<Baseline> = None;
     loop {
@@ -130,7 +137,16 @@ fn tui_loop(
             .map(|b| b.deviations(&snapshot, 1.5))
             .unwrap_or_default();
         terminal.draw(|frame| {
-            ui::draw(frame, &snapshot, engine, target_label, config, baseline.is_some(), &alerts)
+            ui::draw(
+                frame,
+                &snapshot,
+                engine,
+                target_label,
+                config,
+                baseline.is_some(),
+                &alerts,
+                show_mpls,
+            )
         })?;
 
         if event::poll(Duration::from_millis(200))? {
@@ -212,6 +228,7 @@ fn parse_args() -> Result<Option<Args>, String> {
     let mut json = false;
     let mut csv = false;
     let mut mtu = false;
+    let mut mpls = false;
 
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
@@ -248,8 +265,8 @@ fn parse_args() -> Result<Option<Args>, String> {
                 timeout = Duration::from_secs_f64(next_f64(&mut it, "timeout")?.max(0.05))
             }
             "--flows" => flows = next_num(&mut it, "flows")?,
+            "-z" | "--mpls" => mpls = true,
             // Accepted for MTR compatibility but not yet implemented.
-            "-z" | "--mpls" => eprintln!("hopscout: note: MPLS (-z) is not supported yet"),
             "-x" | "--xml" => eprintln!("hopscout: note: XML output is not supported yet"),
             "-a" | "--address" => {
                 let _ = it.next();
@@ -297,6 +314,7 @@ fn parse_args() -> Result<Option<Args>, String> {
         no_dns,
         show_ips,
         wide,
+        mpls,
     }))
 }
 
@@ -343,6 +361,7 @@ fn usage() {
          \x20   -n, --no-dns           don't resolve host names\n\
          \x20   -b, --show-ips         show IPs alongside names\n\
          \x20   -e, --aslookup         AS lookup (always on)\n\
+         \x20   -z, --mpls             show MPLS labels (udp/tcp modes)\n\
          \x20   -v, --version          print version\n\
          \x20   -h, --help             show this help\n\
          \n\

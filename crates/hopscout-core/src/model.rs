@@ -55,4 +55,33 @@ pub struct ProbeResponse {
     pub from: Option<IpAddr>,
     /// Round-trip time — `None` on timeout.
     pub rtt: Option<Duration>,
+    /// MPLS label stack from the hop's ICMP extension, if any. Only populated by
+    /// the raw-socket / Npcap backends (the rung-1 ICMP API hides extensions).
+    pub mpls: Vec<MplsLabel>,
+}
+
+/// One MPLS label-stack entry, decoded from an ICMP extension (RFC 4950).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MplsLabel {
+    /// 20-bit MPLS label.
+    pub label: u32,
+    /// 3-bit traffic class / experimental bits.
+    pub exp: u8,
+    /// Bottom-of-stack bit.
+    pub bos: bool,
+    /// Label TTL.
+    pub ttl: u8,
+}
+
+impl ProbeResponse {
+    /// A response with no MPLS labels (the common case).
+    pub fn new(
+        ttl: u8,
+        seq: u64,
+        outcome: ProbeOutcome,
+        from: Option<IpAddr>,
+        rtt: Option<Duration>,
+    ) -> Self {
+        Self { ttl, seq, outcome, from, rtt, mpls: Vec::new() }
+    }
 }

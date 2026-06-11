@@ -86,6 +86,23 @@ fn main() -> std::io::Result<()> {
     enricher.stop();
     println!("\npath_len = {:?} (destination hop)", s.path_len);
 
+    let mpls_hops: Vec<String> = (0..s.visible_hops())
+        .filter(|&i| !s.hops[i].mpls.is_empty())
+        .map(|i| {
+            let labels: Vec<String> = s.hops[i]
+                .mpls
+                .iter()
+                .map(|m| format!("Lbl {} TTL {}", m.label, m.ttl))
+                .collect();
+            format!("  hop {}: {}", i + 1, labels.join(", "))
+        })
+        .collect();
+    if mpls_hops.is_empty() {
+        println!("MPLS: none seen on this path");
+    } else {
+        println!("MPLS labels:\n{}", mpls_hops.join("\n"));
+    }
+
     if flows > 1 {
         println!("\nper-flow paths (last two octets):");
         for (fi, path) in s.paths.iter().enumerate() {

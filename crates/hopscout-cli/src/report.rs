@@ -61,6 +61,14 @@ pub fn text(s: &Session, args: &Args, config: &EngineConfig) -> String {
             f(st.worst_ms()),
             f(st.stddev_ms()),
         ));
+        if args.mpls {
+            for m in &s.hops[i].mpls {
+                out.push_str(&format!(
+                    "         [MPLS: Lbl {} TC {} S {} TTL {}]\n",
+                    m.label, m.exp, m.bos as u8, m.ttl
+                ));
+            }
+        }
     }
     out
 }

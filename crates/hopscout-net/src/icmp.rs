@@ -320,23 +320,11 @@ fn classify(req: &ProbeRequest, status: u32, from: IpAddr, rtt: Duration) -> Pro
         ProbeOutcome::Timeout => (None, None),
         _ => (Some(from), Some(rtt)),
     };
-    ProbeResponse {
-        ttl: req.ttl,
-        seq: req.seq,
-        outcome,
-        from,
-        rtt,
-    }
+    ProbeResponse::new(req.ttl, req.seq, outcome, from, rtt)
 }
 
 fn timeout_response(req: &ProbeRequest) -> ProbeResponse {
-    ProbeResponse {
-        ttl: req.ttl,
-        seq: req.seq,
-        outcome: ProbeOutcome::Timeout,
-        from: None,
-        rtt: None,
-    }
+    ProbeResponse::new(req.ttl, req.seq, ProbeOutcome::Timeout, None, None)
 }
 
 /// Build a `SOCKADDR_IN6` for `addr` (scope 0; global unicast traceroute).

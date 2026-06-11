@@ -15,6 +15,7 @@ pub fn draw(
     config: &EngineConfig,
     has_baseline: bool,
     alerts: &[Alert],
+    show_mpls: bool,
 ) {
     let chunks = Layout::vertical([
         Constraint::Length(1), // title
@@ -24,7 +25,7 @@ pub fn draw(
     .split(frame.area());
 
     frame.render_widget(title_line(engine, target_label, config), chunks[0]);
-    frame.render_widget(hop_table(session, config.first_ttl), chunks[1]);
+    frame.render_widget(hop_table(session, config.first_ttl, show_mpls), chunks[1]);
     frame.render_widget(footer_line(session, has_baseline, alerts), chunks[2]);
 }
 
@@ -48,7 +49,7 @@ fn title_line<'a>(engine: &Engine, target_label: &'a str, config: &EngineConfig)
     Paragraph::new(line)
 }
 
-fn hop_table(session: &Session, first_ttl: u8) -> Table<'static> {
+fn hop_table(session: &Session, first_ttl: u8, show_mpls: bool) -> Table<'static> {
     let header = Row::new([
         "Hop", "Host", "ASN", "Loss%", "Snt", "Last", "Avg", "Best", "Wrst", "Jttr", "p95",
     ])
@@ -59,12 +60,16 @@ fn hop_table(session: &Session, first_ttl: u8) -> Table<'static> {
         .map(|i| {
             let ttl = i + 1;
             let hop = &session.hops[i];
-            let host = hop
+            let mut host = hop
                 .meta
                 .hostname
                 .clone()
                 .or_else(|| hop.primary_addr().map(|a| a.to_string()))
                 .unwrap_or_else(|| "*".to_string());
+            if show_mpls && !hop.mpls.is_empty() {
+                let labels: Vec<String> = hop.mpls.iter().map(|m| m.label.to_string()).collect();
+                host = format!("{host} [MPLS {}]", labels.join(","));
+            }
             let asn = hop
                 .meta
                 .asn

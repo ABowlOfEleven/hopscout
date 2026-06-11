@@ -13,6 +13,8 @@ mod caps;
 #[cfg(windows)]
 mod elevate;
 #[cfg(windows)]
+mod ext;
+#[cfg(windows)]
 mod factory;
 #[cfg(windows)]
 mod icmp;
