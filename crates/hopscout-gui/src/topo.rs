@@ -10,24 +10,17 @@ use std::net::IpAddr;
 use egui::{Align2, Color32, FontId};
 use hopscout_core::Session;
 
-const BG: Color32 = Color32::from_rgb(18, 24, 34);
-const LABEL: Color32 = Color32::from_rgb(205, 214, 224);
-const MUTED: Color32 = Color32::from_rgb(120, 130, 145);
-const FLOW_COLORS: [Color32; 6] = [
-    Color32::from_rgb(57, 217, 138),
-    Color32::from_rgb(90, 170, 230),
-    Color32::from_rgb(230, 170, 80),
-    Color32::from_rgb(210, 110, 200),
-    Color32::from_rgb(120, 210, 210),
-    Color32::from_rgb(230, 120, 110),
-];
+use crate::theme::Theme;
 
-pub fn show(ui: &mut egui::Ui, session: &Session) {
+pub fn show(ui: &mut egui::Ui, session: &Session, theme: &Theme) {
+    let bg = theme.surface;
+    let label_color = theme.text;
+    let muted = theme.muted;
     let n = session.visible_hops();
     let size = egui::vec2(ui.available_width(), ui.available_height().max(240.0));
     let (rect, _resp) = ui.allocate_exact_size(size, egui::Sense::hover());
     let painter = ui.painter_at(rect);
-    painter.rect_filled(rect, 4.0, BG);
+    painter.rect_filled(rect, 4.0, bg);
 
     if n == 0 {
         painter.text(
@@ -35,7 +28,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session) {
             Align2::CENTER_CENTER,
             "Discovering path…",
             FontId::proportional(14.0),
-            MUTED,
+            muted,
         );
         return;
     }
@@ -63,7 +56,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session) {
 
     // Per-flow polylines: connect consecutive responding TTLs for each flow.
     for (fi, path) in session.paths.iter().enumerate() {
-        let stroke = egui::Stroke::new(1.6, FLOW_COLORS[fi % FLOW_COLORS.len()]);
+        let stroke = egui::Stroke::new(1.6, theme.flow_color(fi));
         let mut prev: Option<egui::Pos2> = None;
         for (i, slot) in path.iter().take(n).enumerate() {
             match slot.and_then(|addr| node_pos.get(&(i, addr)).copied()) {
@@ -88,14 +81,14 @@ pub fn show(ui: &mut egui::Ui, session: &Session) {
             Align2::CENTER_CENTER,
             (i + 1).to_string(),
             ttl_font.clone(),
-            MUTED,
+            muted,
         );
         let hop = &session.hops[i];
         if hop.addrs.is_empty() {
-            painter.circle_filled(egui::pos2(x, y_for(0, 1)), 4.0, MUTED);
+            painter.circle_filled(egui::pos2(x, y_for(0, 1)), 4.0, muted);
             continue;
         }
-        let color = asn_color(hop.meta.asn);
+        let color = asn_color(hop.meta.asn, theme);
         let fan = hop.addrs.len() > 1;
         for addr in &hop.addrs {
             let pos = node_pos[&(i, *addr)];
@@ -105,7 +98,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session) {
                 Align2::CENTER_TOP,
                 short_addr(addr),
                 label_font.clone(),
-                LABEL,
+                label_color,
             );
         }
     }
@@ -116,7 +109,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session) {
             Align2::RIGHT_CENTER,
             format!("{} flows", session.paths.len()),
             ttl_font,
-            MUTED,
+            muted,
         );
     }
 }
@@ -131,9 +124,9 @@ fn short_addr(a: &IpAddr) -> String {
     }
 }
 
-fn asn_color(asn: Option<u32>) -> Color32 {
+fn asn_color(asn: Option<u32>, theme: &Theme) -> Color32 {
     match asn {
-        None => MUTED,
+        None => theme.muted,
         Some(a) => {
             let h = a.wrapping_mul(2_654_435_761);
             Color32::from_rgb(

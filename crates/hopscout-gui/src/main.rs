@@ -6,9 +6,11 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod coastline;
 mod map;
 mod sparkline;
 mod table;
+mod theme;
 mod topo;
 
 use std::net::{IpAddr, ToSocketAddrs};
@@ -17,6 +19,8 @@ use std::time::Duration;
 use hopscout_core::{Alert, Baseline, Engine, EngineConfig, ProbeProtocol, Session, brand};
 use hopscout_enrich::EnricherHandle;
 use hopscout_net::{BackendError, make_factory, relaunch_elevated};
+
+use theme::Theme;
 
 fn main() -> eframe::Result<()> {
     let arg_target = std::env::args().nth(1);
@@ -68,6 +72,9 @@ struct HopscoutApp {
     port: u16,
     flows: u8,
     view: View,
+    themes: Vec<Theme>,
+    theme_idx: usize,
+    applied_idx: Option<usize>,
     monitors: Vec<Monitor>,
     active: Option<usize>,
     error: Option<String>,
@@ -85,6 +92,9 @@ impl HopscoutApp {
             port: 443,
             flows: 1,
             view: View::Table,
+            themes: theme::all(),
+            theme_idx: 0,
+            applied_idx: None,
             monitors: Vec::new(),
             active: None,
             error: None,
@@ -164,6 +174,15 @@ impl eframe::App for HopscoutApp {
             ui.ctx().request_repaint_after(Duration::from_millis(150));
         }
 
+        // Apply the active theme on first frame and whenever it changes.
+        if self.applied_idx != Some(self.theme_idx) {
+            if self.theme_idx >= self.themes.len() {
+                self.theme_idx = 0;
+            }
+            self.themes[self.theme_idx].apply(ui.ctx());
+            self.applied_idx = Some(self.theme_idx);
+        }
+
         self.top_bar(ui);
         self.monitor_list(ui);
         self.main_view(ui);
@@ -219,6 +238,22 @@ impl HopscoutApp {
                     if ui.button("About").clicked() {
                         self.show_about = true;
                     }
+                    if ui.button("⟳").on_hover_text("Reload custom themes").clicked() {
+                        let keep = self.themes.get(self.theme_idx).map(|t| t.name.clone());
+                        self.themes = theme::all();
+                        self.theme_idx = keep
+                            .and_then(|n| self.themes.iter().position(|t| t.name == n))
+                            .unwrap_or(0);
+                        self.applied_idx = None;
+                    }
+                    let cur = self.themes.get(self.theme_idx).map(|t| t.name.as_str()).unwrap_or("Theme");
+                    egui::ComboBox::from_id_salt("theme")
+                        .selected_text(cur)
+                        .show_ui(ui, |ui| {
+                            for (i, t) in self.themes.iter().enumerate() {
+                                ui.selectable_value(&mut self.theme_idx, i, &t.name);
+                            }
+                        });
                 });
             });
             ui.horizontal(|ui| {
@@ -272,9 +307,10 @@ impl HopscoutApp {
     }
 
     fn main_view(&mut self, ui: &mut egui::Ui) {
+        let theme = self.themes[self.theme_idx.min(self.themes.len() - 1)].clone();
         egui::CentralPanel::default().show_inside(ui, |ui| {
             if let Some(err) = self.error.clone() {
-                ui.colored_label(egui::Color32::from_rgb(220, 80, 80), &err);
+                ui.colored_label(theme.bad, &err);
                 if self.needs_elevation && ui.button("Relaunch as administrator").clicked() {
                     let _ = relaunch_elevated();
                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
@@ -307,12 +343,12 @@ impl HopscoutApp {
             match self.view {
                 View::Table => {
                     let selected = &mut self.monitors[active].selected;
-                    table::show(ui, &snapshot, selected);
+                    table::show(ui, &snapshot, selected, &theme);
                     ui.separator();
                     sparkline::panel(ui, &snapshot, *selected);
                 }
-                View::Map => map::show(ui, &snapshot),
-                View::Topology => topo::show(ui, &snapshot),
+                View::Map => map::show(ui, &snapshot, &theme),
+                View::Topology => topo::show(ui, &snapshot, &theme),
                 View::Alerts => {
                     let mon = &mut self.monitors[active];
                     ui.horizontal(|ui| {
@@ -331,13 +367,10 @@ impl HopscoutApp {
                         Some(b) => {
                             let devs = b.deviations(&snapshot, 1.5);
                             if devs.is_empty() {
-                                ui.colored_label(
-                                    egui::Color32::from_rgb(120, 200, 120),
-                                    "✓ path matches baseline",
-                                );
+                                ui.colored_label(theme.good, "✓ path matches baseline");
                             } else {
                                 for d in &devs {
-                                    ui.colored_label(alert_color(d), d.message());
+                                    ui.colored_label(alert_color(d, &theme), d.message());
                                 }
                             }
                         }
@@ -383,13 +416,13 @@ fn summary(s: &Session) -> (usize, f64, Option<f64>) {
     (n, worst, dest_avg)
 }
 
-fn alert_color(a: &Alert) -> egui::Color32 {
+fn alert_color(a: &Alert, theme: &Theme) -> egui::Color32 {
     match a {
         Alert::RouteChanged { .. } | Alert::HopAppeared { .. } | Alert::HopDisappeared { .. } => {
-            egui::Color32::from_rgb(220, 180, 90) // route shifts — amber
+            theme.warn // route shifts
         }
         Alert::LatencyRegression { .. } | Alert::LossOnset { .. } => {
-            egui::Color32::from_rgb(220, 110, 90) // degradation — red
+            theme.bad // degradation
         }
     }
 }

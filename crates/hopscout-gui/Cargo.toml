@@ -21,9 +21,12 @@ path-guid = "C3D5A2E4-8B16-4F70-9A21-7E0C1B2D3A45"
 hopscout-core = { version = "0.1.0", path = "../hopscout-core" }
 hopscout-net = { version = "0.1.0", path = "../hopscout-net" }
 hopscout-enrich = { version = "0.1.0", path = "../hopscout-enrich" }
+directories = "6.0.0"
 eframe = "0.34.3"
 egui = "0.34.3"
 egui_extras = "0.34.3"
+serde = { version = "1.0.228", features = ["derive"] }
+toml = "0.8"
 
 [lints]
 workspace = true

@@ -1,23 +1,35 @@
-//! Equirectangular world-map view: hops with geolocation plotted by lat/lon,
-//! connected in path order and labeled with city + TTL. A graticule stands in
-//! for coastlines (no map asset needed).
+//! Equirectangular world-map view: coastlines (if the asset is present) plus
+//! hops plotted by lat/lon, connected in path order and labeled with city + TTL.
 
 use hopscout_core::Session;
 
-const BG: egui::Color32 = egui::Color32::from_rgb(18, 24, 34);
-const GRID: egui::Color32 = egui::Color32::from_rgb(34, 44, 58);
-const EQUATOR: egui::Color32 = egui::Color32::from_rgb(48, 60, 76);
-const ACCENT: egui::Color32 = egui::Color32::from_rgb(57, 217, 138);
-const LABEL: egui::Color32 = egui::Color32::from_rgb(205, 214, 224);
+use crate::coastline;
+use crate::theme::Theme;
 
-pub fn show(ui: &mut egui::Ui, session: &Session) {
+pub fn show(ui: &mut egui::Ui, session: &Session, theme: &Theme) {
     let size = egui::vec2(ui.available_width(), ui.available_height().max(240.0));
     let (rect, _resp) = ui.allocate_exact_size(size, egui::Sense::hover());
     let painter = ui.painter_at(rect);
-    painter.rect_filled(rect, 4.0, BG);
+    painter.rect_filled(rect, 4.0, theme.surface);
 
-    // Graticule: meridians every 30°, parallels every 30°, equator emphasized.
-    let grid = egui::Stroke::new(1.0, GRID);
+    let project = |lat: f32, lon: f32| {
+        egui::pos2(
+            rect.left() + rect.width() * ((lon + 180.0) / 360.0),
+            rect.top() + rect.height() * ((90.0 - lat) / 180.0),
+        )
+    };
+
+    // Coastlines under everything.
+    let coast = egui::Stroke::new(1.0, theme.grid.gamma_multiply(1.6));
+    for stroke_pts in coastline::polylines() {
+        let pts: Vec<egui::Pos2> = stroke_pts.iter().map(|&(lon, lat)| project(lat, lon)).collect();
+        if pts.len() >= 2 {
+            painter.add(egui::Shape::line(pts, coast));
+        }
+    }
+
+    // Graticule + equator.
+    let grid = egui::Stroke::new(1.0, theme.grid);
     for k in 1..12 {
         let x = rect.left() + rect.width() * (k as f32 / 12.0);
         painter.line_segment([egui::pos2(x, rect.top()), egui::pos2(x, rect.bottom())], grid);
@@ -29,15 +41,8 @@ pub fn show(ui: &mut egui::Ui, session: &Session) {
     let mid = rect.top() + rect.height() * 0.5;
     painter.line_segment(
         [egui::pos2(rect.left(), mid), egui::pos2(rect.right(), mid)],
-        egui::Stroke::new(1.0, EQUATOR),
+        egui::Stroke::new(1.0, theme.muted.gamma_multiply(0.6)),
     );
-
-    let project = |lat: f32, lon: f32| {
-        egui::pos2(
-            rect.left() + rect.width() * ((lon + 180.0) / 360.0),
-            rect.top() + rect.height() * ((90.0 - lat) / 180.0),
-        )
-    };
 
     // Geolocated hops in path order.
     let mut pts: Vec<(egui::Pos2, String, usize)> = Vec::new();
@@ -49,28 +54,20 @@ pub fn show(ui: &mut egui::Ui, session: &Session) {
         }
     }
 
-    // Path arcs between consecutive located hops.
-    let line = egui::Stroke::new(1.5, ACCENT);
+    let line = egui::Stroke::new(1.5, theme.accent);
     for w in pts.windows(2) {
         painter.line_segment([w[0].0, w[1].0], line);
     }
 
-    // Nodes + labels.
     let font = egui::FontId::proportional(11.0);
     for (pos, city, ttl) in &pts {
-        painter.circle_filled(*pos, 4.0, ACCENT);
+        painter.circle_filled(*pos, 4.0, theme.accent);
         let text = if city.is_empty() {
             ttl.to_string()
         } else {
             format!("{ttl} · {city}")
         };
-        painter.text(
-            *pos + egui::vec2(7.0, -2.0),
-            egui::Align2::LEFT_CENTER,
-            text,
-            font.clone(),
-            LABEL,
-        );
+        painter.text(*pos + egui::vec2(7.0, -2.0), egui::Align2::LEFT_CENTER, text, font.clone(), theme.text);
     }
 
     if pts.is_empty() {
@@ -79,7 +76,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session) {
             egui::Align2::CENTER_CENTER,
             "Waiting for geolocation…",
             egui::FontId::proportional(14.0),
-            egui::Color32::GRAY,
+            theme.muted,
         );
     }
 }

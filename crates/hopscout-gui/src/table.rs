@@ -4,11 +4,13 @@
 use egui_extras::{Column, TableBuilder};
 use hopscout_core::Session;
 
+use crate::theme::Theme;
+
 const HEADERS: [&str; 11] = [
     "Hop", "Host", "ASN", "Loss%", "Snt", "Last", "Avg", "Best", "Wrst", "Jitter", "p95",
 ];
 
-pub fn show(ui: &mut egui::Ui, session: &Session, selected: &mut Option<usize>) {
+pub fn show(ui: &mut egui::Ui, session: &Session, selected: &mut Option<usize>, theme: &Theme) {
     let n = session.visible_hops();
 
     TableBuilder::new(ui)
@@ -55,14 +57,14 @@ pub fn show(ui: &mut egui::Ui, session: &Session, selected: &mut Option<usize>) 
                 });
                 row.col(|ui| {
                     if let Some(asn) = hop.meta.asn {
-                        ui.colored_label(egui::Color32::from_rgb(90, 170, 210), format!("AS{asn}"));
+                        ui.colored_label(theme.accent2, format!("AS{asn}"));
                     }
                 });
 
                 let st = &hop.stat;
                 let loss = st.loss_pct();
                 row.col(|ui| {
-                    ui.colored_label(loss_color(loss), format!("{loss:.0}%"));
+                    ui.colored_label(theme.loss(loss), format!("{loss:.0}%"));
                 });
                 row.col(|ui| {
                     ui.label(st.sent().to_string());
@@ -87,16 +89,6 @@ pub fn show(ui: &mut egui::Ui, session: &Session, selected: &mut Option<usize>) 
                 });
             });
         });
-}
-
-fn loss_color(loss: f64) -> egui::Color32 {
-    if loss <= 0.0 {
-        egui::Color32::from_rgb(120, 200, 120)
-    } else if loss < 5.0 {
-        egui::Color32::from_rgb(220, 200, 90)
-    } else {
-        egui::Color32::from_rgb(220, 90, 90)
-    }
 }
 
 fn fmt_ms(v: Option<f64>) -> String {
