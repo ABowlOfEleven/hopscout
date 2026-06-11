@@ -126,6 +126,10 @@ fn parse_args() -> Result<Option<Args>, String> {
                 usage();
                 return Ok(None);
             }
+            "-V" | "--version" => {
+                println!("{}", hopscout_core::brand::name_version());
+                return Ok(None);
+            }
             "-4" => family = Family::V4,
             "-6" => family = Family::V6,
             "-p" | "--proto" => {

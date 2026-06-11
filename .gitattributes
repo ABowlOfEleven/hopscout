@@ -1,0 +1,6 @@
+# Normalize line endings to LF in the repo; check out native on each platform.
+* text=auto eol=lf
+
+# Binary assets must never be line-ending munged.
+*.ico binary
+*.png binary

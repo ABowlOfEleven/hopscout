@@ -7,6 +7,7 @@
 //! project lives behind the FFI boundary in `hopscout-net`.
 
 pub mod backend;
+pub mod brand;
 pub mod caps;
 pub mod engine;
 pub mod model;

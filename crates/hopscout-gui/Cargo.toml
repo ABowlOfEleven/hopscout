@@ -13,6 +13,10 @@ description = "hopscout desktop GUI — live trace table + per-hop sparklines (e
 name = "HopScout"
 path = "src/main.rs"
 
+[package.metadata.wix]
+upgrade-guid = "B6E2F0A1-7C43-4D58-9E10-2A6B5C8D4F31"
+path-guid = "C3D5A2E4-8B16-4F70-9A21-7E0C1B2D3A45"
+
 [dependencies]
 hopscout-core = { version = "0.1.0", path = "../hopscout-core" }
 hopscout-net = { version = "0.1.0", path = "../hopscout-net" }
@@ -23,3 +27,7 @@ egui_extras = "0.34.3"
 
 [lints]
 workspace = true
+
+# Windows-only: embeds icon + version metadata into the .exe.
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1.31"

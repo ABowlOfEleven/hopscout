@@ -20,3 +20,7 @@ ratatui = "0.30.1"
 
 [lints]
 workspace = true
+
+# Windows-only: embeds icon + version metadata into the .exe.
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1.31"

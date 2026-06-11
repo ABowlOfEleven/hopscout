@@ -13,18 +13,21 @@ use std::net::{IpAddr, ToSocketAddrs};
 use std::sync::Arc;
 use std::time::Duration;
 
-use hopscout_core::{Engine, EngineConfig};
+use hopscout_core::{Engine, EngineConfig, brand};
 use hopscout_enrich::EnricherHandle;
 use hopscout_net::IcmpBackendFactory;
 
 fn main() -> eframe::Result<()> {
     let arg_target = std::env::args().nth(1);
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([900.0, 600.0]),
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([900.0, 600.0])
+            .with_title(brand::name_version())
+            .with_app_id("hopscout"),
         ..Default::default()
     };
     eframe::run_native(
-        "hopscout",
+        brand::NAME,
         options,
         Box::new(|_cc| Ok(Box::new(HopscoutApp::new(arg_target)))),
     )
@@ -53,6 +56,7 @@ struct HopscoutApp {
     running: Option<Running>,
     selected: Option<usize>,
     error: Option<String>,
+    show_about: bool,
 }
 
 impl HopscoutApp {
@@ -64,6 +68,7 @@ impl HopscoutApp {
             running: None,
             selected: None,
             error: None,
+            show_about: false,
         };
         if arg_target.is_some() {
             app.start();
@@ -149,6 +154,12 @@ impl eframe::App for HopscoutApp {
                 } else if ui.button("Start").clicked() || enter {
                     self.start();
                 }
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button("About").clicked() {
+                        self.show_about = true;
+                    }
+                });
             });
             ui.add_space(4.0);
         });
@@ -184,6 +195,27 @@ impl eframe::App for HopscoutApp {
             ui.separator();
             sparkline::panel(ui, &snapshot, self.selected);
         });
+
+        if self.show_about {
+            let ctx = ui.ctx().clone();
+            egui::Window::new("About")
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(&ctx, |ui| {
+                    ui.heading(brand::DISPLAY_NAME);
+                    ui.label(brand::name_version());
+                    ui.label(brand::TAGLINE);
+                    ui.add_space(6.0);
+                    ui.hyperlink(brand::REPOSITORY);
+                    ui.add_space(6.0);
+                    ui.label("Rung-1 ICMP needs no admin; UDP (rung 2) needs elevation.");
+                    ui.add_space(8.0);
+                    if ui.button("Close").clicked() {
+                        self.show_about = false;
+                    }
+                });
+        }
     }
 }
 

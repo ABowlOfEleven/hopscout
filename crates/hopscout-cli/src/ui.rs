@@ -33,7 +33,10 @@ fn title_line<'a>(engine: &Engine, target_label: &'a str, config: &EngineConfig)
         Span::styled("running", Style::default().fg(Color::Green))
     };
     let line = Line::from(vec![
-        Span::styled("hopscout", Style::default().add_modifier(Modifier::BOLD)),
+        Span::styled(
+            hopscout_core::brand::name_version(),
+            Style::default().add_modifier(Modifier::BOLD),
+        ),
         Span::raw("  →  "),
         Span::raw(format!("{target_label} ({})", config.target)),
         Span::raw("   ["),

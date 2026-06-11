@@ -5,9 +5,11 @@ elevation required for the default path — with a `ratatui` CLI and an `egui`
 GUI sharing one engine. MTR parity, plus ASN/Geo enrichment, path-change
 alerting, multi-target dashboards, and multipath (Paris) discovery.
 
-> Status: **Phase 1 complete.** Concurrent rung-1 engine (unprivileged ICMP),
-> live `ratatui` CLI, `egui` GUI, and rDNS + ASN enrichment all working. Higher
-> rungs (raw sockets, UDP/TCP, Paris multipath) and the IPv6 path are next.
+> Status: **Phases 1–2 working.** Concurrent rung-1 engine (unprivileged ICMP,
+> IPv4 **and IPv6**), live `ratatui` CLI, `egui` GUI, rDNS + ASN enrichment, and
+> rung-2 **UDP traceroute** via raw sockets with capability detection +
+> self-elevation. Branding (icon, version metadata, About) is in. Rung 3 (Npcap)
+> and Paris multipath are next.
 
 ## Workspace
 
@@ -53,8 +55,17 @@ cargo run -p hopscout-cli -- one.one.one.one -i 500 -m 40
 | `-w, --timeout <ms>`  | per-probe timeout            | 1000 |
 | `-m, --max-hops <n>`  | maximum TTL to probe         | 30 |
 | `-s, --size <n>`      | payload bytes                | 32 |
+| `-4` / `-6`           | force IPv4 / IPv6            | auto |
+| `-p, --proto <p>`     | `icmp` or `udp` (udp needs admin) | icmp |
+| `-V, --version`       | print version                | — |
 
 Keys: `q`/`Esc` quit · `p`/space pause · `r` reset.
+
+UDP mode (`-p udp`) opens a raw `SIO_RCVALL` sniffer to capture ICMP errors,
+which requires elevation — hopscout detects this and relaunches itself with a
+UAC prompt. The brand identity (name/version/icon) lives in
+[`assets/`](assets/) and `crates/hopscout-core/src/brand.rs`, embedded into both
+`.exe`s via `winresource`.
 
 ## GUI usage
 
