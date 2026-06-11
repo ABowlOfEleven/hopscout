@@ -19,7 +19,7 @@ alerting, multi-target dashboards, and multipath (Paris) discovery.
 |-------|------|--------|-------|
 | `hopscout-core`   | Probe engine, `Session` model, rolling stats, the `ProbeBackend` trait. | forbidden | working |
 | `hopscout-net`    | The single Win32 FFI boundary. Rung 1 (ICMP), rung 2 (raw UDP), rung 3 (Npcap TCP-SYN), capability detection, self-elevation. | allowed (FFI) | working |
-| `hopscout-enrich` | Background reverse-DNS + origin-ASN (Team Cymru WHOIS) enrichment. | forbidden | working |
+| `hopscout-enrich` | Background reverse-DNS, origin-ASN (Cymru WHOIS), and geolocation (ip-api). | forbidden | working |
 | `hopscout-cli`    | `ratatui` live trace table. | forbidden | working |
 | `hopscout-gui`    | `egui` app — live table + per-hop sparklines. | forbidden | working |
 
@@ -86,9 +86,13 @@ cargo run -p hopscout-gui            # enter a target in the window
 cargo run -p hopscout-gui -- 8.8.8.8 # auto-start a target
 ```
 
-Enter a host, press Start, and watch the live table (loss/RTT/jitter, with
-reverse-DNS and ASN filling in). Click a hop to see its recent-RTT sparkline;
-Pause/Resume/Reset from the top bar.
+Pick a protocol (ICMP/UDP/TCP) and port, enter a host, press Start. Three views:
+
+- **Table** — live loss/RTT/jitter with rDNS + ASN; click a hop for its sparkline.
+- **Map** — hops plotted by geolocation on an equirectangular grid, path arcs + city labels.
+- **Topology** — TTL columns of hop addresses with ASN coloring; multiple nodes in a column reveal ECMP/multipath.
+
+Pause/Resume/Reset from the top bar; UDP/TCP prompt to relaunch elevated when needed.
 
 ### Headless smoke trace
 
