@@ -153,7 +153,9 @@ fn tui_loop(
 /// Run until each hop has `cycles` samples (or a deadline), then print a report.
 fn run_report(engine: &Engine, args: &Args, config: &EngineConfig) -> io::Result<()> {
     let per_cycle = config.interval.max(Duration::from_millis(50));
-    let deadline = Instant::now() + per_cycle * (args.cycles + 4) + Duration::from_secs(3);
+    let deadline = Instant::now()
+        + per_cycle.saturating_mul(args.cycles.saturating_add(4))
+        + Duration::from_secs(3);
 
     loop {
         let snap = engine.snapshot();
@@ -239,8 +241,12 @@ fn parse_args() -> Result<Option<Args>, String> {
             "-s" | "--psize" => psize = next_num(&mut it, "psize")?,
             "-m" | "--max-ttl" => max_ttl = next_num(&mut it, "max-ttl")?,
             "-f" | "--first-ttl" => first_ttl = next_num(&mut it, "first-ttl")?,
-            "-i" | "--interval" => interval = Duration::from_secs_f64(next_f64(&mut it, "interval")?),
-            "--timeout" => timeout = Duration::from_secs_f64(next_f64(&mut it, "timeout")?),
+            "-i" | "--interval" => {
+                interval = Duration::from_secs_f64(next_f64(&mut it, "interval")?.max(0.01))
+            }
+            "--timeout" => {
+                timeout = Duration::from_secs_f64(next_f64(&mut it, "timeout")?.max(0.05))
+            }
             "--flows" => flows = next_num(&mut it, "flows")?,
             // Accepted for MTR compatibility but not yet implemented.
             "-z" | "--mpls" => eprintln!("hopscout: note: MPLS (-z) is not supported yet"),
@@ -262,6 +268,7 @@ fn parse_args() -> Result<Option<Args>, String> {
     if max_ttl == 0 {
         return Err("max-ttl must be >= 1".to_string());
     }
+    let cycles = cycles.clamp(1, 100_000);
     let mode = if mtu {
         Mode::Mtu
     } else if json {

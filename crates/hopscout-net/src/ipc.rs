@@ -16,7 +16,6 @@
 //! work, and spawning the helper elevated, are the remaining steps and require an
 //! admin host to validate.
 
-use core::ffi::c_void;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::net::{IpAddr, Ipv4Addr};
@@ -115,7 +114,10 @@ fn decode_resp(b: &[u8; RESP_LEN], ttl: u8, seq: u64) -> ProbeResponse {
     };
     let from = (b[1] == 4).then(|| IpAddr::V4(Ipv4Addr::new(b[2], b[3], b[4], b[5])));
     let rtt_ms = u32::from_be_bytes(b[6..10].try_into().unwrap());
-    let rtt = (b[1] != 0).then(|| Duration::from_millis(rtt_ms as u64));
+    // RTT presence follows the outcome (everything but a timeout has one), so the
+    // decoder doesn't depend on the from-address byte.
+    let rtt = (!matches!(outcome, ProbeOutcome::Timeout))
+        .then(|| Duration::from_millis(rtt_ms as u64));
     ProbeResponse { ttl, seq, outcome, from, rtt }
 }
 
@@ -181,7 +183,7 @@ pub fn serve() -> io::Result<()> {
             let _ = ConnectNamedPipe(handle, None);
         }
         // SAFETY: take ownership of the pipe handle as a File for byte I/O.
-        let file = unsafe { File::from_raw_handle(handle.0 as *mut c_void) };
+        let file = unsafe { File::from_raw_handle(handle.0) };
         thread::spawn(move || {
             let _ = handle_connection(file);
         });

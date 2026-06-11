@@ -79,7 +79,9 @@ impl Engine {
         let paused = Arc::new(AtomicBool::new(false));
         let path_len = Arc::new(AtomicU8::new(config.max_hops));
 
-        let flows = config.flows.max(1);
+        // Cap flows so an extreme value can't explode threads / port ranges
+        // (flows x max_hops workers, each owning a backend).
+        let flows = config.flows.clamp(1, 16);
         let first = config.first_ttl.max(1);
         let mut workers = Vec::with_capacity(config.max_hops as usize * flows as usize);
         for flow in 0..flows as u16 {
