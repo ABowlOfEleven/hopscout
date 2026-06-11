@@ -12,7 +12,7 @@ use std::net::{IpAddr, ToSocketAddrs};
 use std::sync::Arc;
 use std::time::Duration;
 
-use hopscout_core::{BackendFactory, Engine, EngineConfig, ProbeProtocol};
+use hopscout_core::{BackendFactory, Baseline, Engine, EngineConfig, ProbeProtocol};
 use hopscout_net::{BackendError, make_factory, relaunch_elevated};
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind};
 
@@ -90,9 +90,15 @@ fn run(
     target_label: &str,
     config: &EngineConfig,
 ) -> io::Result<()> {
+    let mut baseline: Option<Baseline> = None;
     loop {
         let snapshot = engine.snapshot();
-        terminal.draw(|frame| ui::draw(frame, &snapshot, engine, target_label, config))?;
+        let alerts = baseline
+            .as_ref()
+            .map(|b| b.deviations(&snapshot, 1.5))
+            .unwrap_or_default();
+        terminal
+            .draw(|frame| ui::draw(frame, &snapshot, engine, target_label, config, baseline.is_some(), &alerts))?;
 
         // ~5 fps redraw cadence; also our input poll.
         if event::poll(Duration::from_millis(200))? {
@@ -104,6 +110,7 @@ fn run(
                     KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
                     KeyCode::Char('p') | KeyCode::Char(' ') => engine.toggle_pause(),
                     KeyCode::Char('r') => engine.reset(),
+                    KeyCode::Char('b') => baseline = Some(Baseline::capture(&snapshot)),
                     _ => {}
                 }
             }

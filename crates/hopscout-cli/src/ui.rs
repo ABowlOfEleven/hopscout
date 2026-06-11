@@ -1,6 +1,6 @@
 //! Rendering for the CLI: a title line, the live hop table, and a key hint.
 
-use hopscout_core::{Engine, EngineConfig, Session};
+use hopscout_core::{Alert, Engine, EngineConfig, Session};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout};
 use ratatui::style::{Color, Modifier, Style};
@@ -13,6 +13,8 @@ pub fn draw(
     engine: &Engine,
     target_label: &str,
     config: &EngineConfig,
+    has_baseline: bool,
+    alerts: &[Alert],
 ) {
     let chunks = Layout::vertical([
         Constraint::Length(1), // title
@@ -23,7 +25,7 @@ pub fn draw(
 
     frame.render_widget(title_line(engine, target_label, config), chunks[0]);
     frame.render_widget(hop_table(session), chunks[1]);
-    frame.render_widget(footer_line(session), chunks[2]);
+    frame.render_widget(footer_line(session, has_baseline, alerts), chunks[2]);
 }
 
 fn title_line<'a>(engine: &Engine, target_label: &'a str, config: &EngineConfig) -> Paragraph<'a> {
@@ -104,19 +106,37 @@ fn hop_table(session: &Session) -> Table<'static> {
         .block(Block::bordered().title(" hops "))
 }
 
-fn footer_line(session: &Session) -> Paragraph<'static> {
-    let reached = match session.path_len {
-        Some(p) => format!("destination at hop {p}"),
-        None => "discovering path…".to_string(),
-    };
-    Paragraph::new(Line::from(vec![
-        Span::styled("q", Style::default().add_modifier(Modifier::BOLD)),
+fn footer_line(session: &Session, has_baseline: bool, alerts: &[Alert]) -> Paragraph<'static> {
+    let bold = || Style::default().add_modifier(Modifier::BOLD);
+    let mut spans = vec![
+        Span::styled("q", bold()),
         Span::raw(" quit · "),
-        Span::styled("p", Style::default().add_modifier(Modifier::BOLD)),
+        Span::styled("p", bold()),
         Span::raw(" pause · "),
-        Span::styled("r", Style::default().add_modifier(Modifier::BOLD)),
-        Span::raw(format!(" reset    {reached}")),
-    ]))
+        Span::styled("r", bold()),
+        Span::raw(" reset · "),
+        Span::styled("b", bold()),
+        Span::raw(" baseline   "),
+    ];
+
+    if has_baseline {
+        if alerts.is_empty() {
+            spans.push(Span::styled("✓ matches baseline", Style::default().fg(Color::Green)));
+        } else {
+            spans.push(Span::styled(
+                format!("⚠ {} change(s): {}", alerts.len(), alerts[0].message()),
+                Style::default().fg(Color::Yellow),
+            ));
+        }
+    } else {
+        let reached = match session.path_len {
+            Some(p) => format!("destination at hop {p}"),
+            None => "discovering path…".to_string(),
+        };
+        spans.push(Span::raw(reached));
+    }
+
+    Paragraph::new(Line::from(spans))
 }
 
 fn loss_style(loss: f64) -> Style {

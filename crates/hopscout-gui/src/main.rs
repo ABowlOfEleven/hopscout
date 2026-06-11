@@ -14,7 +14,7 @@ mod topo;
 use std::net::{IpAddr, ToSocketAddrs};
 use std::time::Duration;
 
-use hopscout_core::{Engine, EngineConfig, ProbeProtocol, Session, brand};
+use hopscout_core::{Alert, Baseline, Engine, EngineConfig, ProbeProtocol, Session, brand};
 use hopscout_enrich::EnricherHandle;
 use hopscout_net::{BackendError, make_factory, relaunch_elevated};
 
@@ -41,6 +41,7 @@ struct Monitor {
     label: String,
     config: EngineConfig,
     selected: Option<usize>,
+    baseline: Option<Baseline>,
 }
 
 impl Monitor {
@@ -56,6 +57,7 @@ enum View {
     Table,
     Map,
     Topology,
+    Alerts,
 }
 
 struct HopscoutApp {
@@ -132,6 +134,7 @@ impl HopscoutApp {
                     label: self.target_input.trim().to_string(),
                     config,
                     selected: None,
+                    baseline: None,
                 });
                 self.active = Some(self.monitors.len() - 1);
             }
@@ -217,6 +220,7 @@ impl HopscoutApp {
                 ui.selectable_value(&mut self.view, View::Table, "Table");
                 ui.selectable_value(&mut self.view, View::Map, "Map");
                 ui.selectable_value(&mut self.view, View::Topology, "Topology");
+                ui.selectable_value(&mut self.view, View::Alerts, "Alerts");
             });
             ui.add_space(4.0);
         });
@@ -295,15 +299,45 @@ impl HopscoutApp {
             });
             ui.separator();
 
-            let selected = &mut self.monitors[active].selected;
             match self.view {
                 View::Table => {
+                    let selected = &mut self.monitors[active].selected;
                     table::show(ui, &snapshot, selected);
                     ui.separator();
                     sparkline::panel(ui, &snapshot, *selected);
                 }
                 View::Map => map::show(ui, &snapshot),
                 View::Topology => topo::show(ui, &snapshot),
+                View::Alerts => {
+                    let mon = &mut self.monitors[active];
+                    ui.horizontal(|ui| {
+                        if ui.button("Set baseline").clicked() {
+                            mon.baseline = Some(Baseline::capture(&snapshot));
+                        }
+                        if mon.baseline.is_some() && ui.button("Clear").clicked() {
+                            mon.baseline = None;
+                        }
+                    });
+                    ui.separator();
+                    match &mon.baseline {
+                        None => {
+                            ui.weak("No baseline captured. Set one to watch for route changes, latency regressions, and loss.");
+                        }
+                        Some(b) => {
+                            let devs = b.deviations(&snapshot, 1.5);
+                            if devs.is_empty() {
+                                ui.colored_label(
+                                    egui::Color32::from_rgb(120, 200, 120),
+                                    "✓ path matches baseline",
+                                );
+                            } else {
+                                for d in &devs {
+                                    ui.colored_label(alert_color(d), d.message());
+                                }
+                            }
+                        }
+                    }
+                }
             }
         });
     }
@@ -342,6 +376,17 @@ fn summary(s: &Session) -> (usize, f64, Option<f64>) {
     }
     let dest_avg = if n > 0 { s.hops[n - 1].stat.avg_ms() } else { None };
     (n, worst, dest_avg)
+}
+
+fn alert_color(a: &Alert) -> egui::Color32 {
+    match a {
+        Alert::RouteChanged { .. } | Alert::HopAppeared { .. } | Alert::HopDisappeared { .. } => {
+            egui::Color32::from_rgb(220, 180, 90) // route shifts — amber
+        }
+        Alert::LatencyRegression { .. } | Alert::LossOnset { .. } => {
+            egui::Color32::from_rgb(220, 110, 90) // degradation — red
+        }
+    }
 }
 
 fn proto_label(p: ProbeProtocol) -> &'static str {

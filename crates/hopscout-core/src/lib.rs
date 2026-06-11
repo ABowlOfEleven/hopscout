@@ -6,6 +6,7 @@
 //! render. All of it is `#![forbid(unsafe_code)]` — the only unsafe in the
 //! project lives behind the FFI boundary in `hopscout-net`.
 
+pub mod alert;
 pub mod backend;
 pub mod brand;
 pub mod caps;
@@ -14,6 +15,7 @@ pub mod model;
 pub mod session;
 pub mod stats;
 
+pub use alert::{Alert, Baseline};
 pub use backend::{BackendFactory, ProbeBackend};
 pub use caps::Capabilities;
 pub use engine::{Engine, EngineConfig};
