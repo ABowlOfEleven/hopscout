@@ -78,6 +78,7 @@ struct HopscoutApp {
     port: u16,
     flows: u8,
     view: View,
+    map_view: map::MapView,
     themes: Vec<Theme>,
     theme_idx: usize,
     applied_idx: Option<usize>,
@@ -98,6 +99,7 @@ impl HopscoutApp {
             port: 443,
             flows: 1,
             view: View::Table,
+            map_view: map::MapView::default(),
             themes: theme::all(),
             theme_idx: 0,
             applied_idx: None,
@@ -369,7 +371,7 @@ impl HopscoutApp {
                     ui.separator();
                     sparkline::panel(ui, &snapshot, *selected);
                 }
-                View::Map => map::show(ui, &snapshot, &theme),
+                View::Map => map::show(ui, &snapshot, &theme, &mut self.map_view),
                 View::Topology => topo::show(ui, &snapshot, &theme),
                 View::Alerts => {
                     let mon = &mut self.monitors[active];
