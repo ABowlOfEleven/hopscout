@@ -22,7 +22,8 @@ alerting, multi-target dashboards, and multipath (Paris) discovery.
 | `hopscout-net`    | The single Win32 FFI boundary. Rung 1 (ICMP), rung 2 (raw UDP), rung 3 (Npcap TCP-SYN), capability detection, self-elevation. | allowed (FFI) | working |
 | `hopscout-enrich` | Background reverse-DNS, origin-ASN (Cymru WHOIS), and geolocation (ip-api). | forbidden | working |
 | `hopscout-cli`    | `ratatui` live trace table. | forbidden | working |
-| `hopscout-gui`    | `egui` app — live table + per-hop sparklines. | forbidden | working |
+| `hopscout-gui`    | `egui` app — table/map/topology/alerts, themes, multi-target. | forbidden | working |
+| `hopscout-helper` | Elevated probe helper (privilege separation) over a named pipe. | forbidden | builds; needs admin to run |
 
 ## Capability ladder
 
@@ -98,6 +99,22 @@ Pick a protocol (ICMP/UDP/TCP) and port, enter a host, press Start. Three views:
 
 Add several targets to monitor them side by side (left panel). Set `flows` for
 multipath. Pause/Resume/Reset and UDP/TCP elevation prompts from the top bar.
+
+### Themes
+
+Six built-in themes (Midnight, Aurora, Nord, Solarized, Paper, Mono) selectable
+from the top bar. Drop your own `*.toml` palette into
+`%APPDATA%\hopscout\config\themes\` (a `custom-example.toml` is written there on
+first run) and hit **⟳** to load it. Each theme recolors the whole UI including
+the map, topology, and table.
+
+### Privilege separation (in progress)
+
+`hopscout-helper.exe` is the elevated half: it owns the raw socket / Npcap and
+serves the unprivileged app over a named pipe, so the main process never runs as
+admin. The message framing and server are in place; the cross-elevation pipe ACL
+and app wiring (vs. the current whole-app self-elevation) are the finishing
+steps.
 
 ### Headless smoke trace
 

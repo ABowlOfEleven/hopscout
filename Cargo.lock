@@ -1820,6 +1820,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "hopscout-helper"
+version = "0.1.0"
+dependencies = [
+ "hopscout-net",
+]
+
+[[package]]
 name = "hopscout-net"
 version = "0.1.0"
 dependencies = [

@@ -23,10 +23,27 @@ pub fn relaunch_elevated() -> io::Result<()> {
         .map(|a| format!("\"{a}\""))
         .collect::<Vec<_>>()
         .join(" ");
+    runas(&exe.to_string_lossy(), &params)
+}
 
+/// Launch the privilege-separation helper (`hopscout-helper.exe`, expected next
+/// to this executable) elevated. It hosts the raw socket / Npcap and serves the
+/// unprivileged app over a named pipe, so the main process need not be admin.
+pub fn spawn_helper_elevated() -> io::Result<()> {
+    let dir = std::env::current_exe()?
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_default();
+    let helper = dir.join("hopscout-helper.exe");
+    runas(&helper.to_string_lossy(), "")
+}
+
+/// Run `exe` with the `runas` verb (triggers UAC). Returns Ok if ShellExecuteW
+/// reports success (> 32).
+fn runas(exe: &str, params: &str) -> io::Result<()> {
     let verb = wide("runas");
-    let file = wide(&exe.to_string_lossy());
-    let parameters = wide(&params);
+    let file = wide(exe);
+    let parameters = wide(params);
 
     // SAFETY: all PCWSTRs point to NUL-terminated wide buffers that outlive the
     // call. ShellExecuteW returns an HINSTANCE-shaped status; > 32 means success.

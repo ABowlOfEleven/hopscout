@@ -27,6 +27,8 @@ windows = { version = "0.62.2", features = [
     "Win32_System_Threading",            # OpenProcessToken / GetCurrentProcess
     "Win32_UI_Shell",                    # ShellExecuteW (runas) for self-elevation
     "Win32_UI_WindowsAndMessaging",      # SW_NORMAL show command
+    "Win32_System_Pipes",                # named-pipe IPC for the elevated helper
+    "Win32_Storage_FileSystem",          # PIPE_ACCESS_DUPLEX + CreateNamedPipeW gate
 ] }
 
 # Used only by the headless `trace` example to exercise enrichment end-to-end.

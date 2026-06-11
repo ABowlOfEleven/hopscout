@@ -19,6 +19,8 @@ mod icmp;
 #[cfg(windows)]
 mod iface;
 #[cfg(windows)]
+mod ipc;
+#[cfg(windows)]
 mod npcap;
 #[cfg(windows)]
 mod packet;
@@ -30,9 +32,11 @@ mod tcp;
 #[cfg(windows)]
 pub use caps::detect as detect_caps;
 #[cfg(windows)]
-pub use elevate::relaunch_elevated;
+pub use elevate::{relaunch_elevated, spawn_helper_elevated};
 #[cfg(windows)]
 pub use factory::{BackendError, make_factory};
+#[cfg(windows)]
+pub use ipc::{HelperBackend, HelperBackendFactory, PIPE_NAME, serve as serve_helper};
 #[cfg(windows)]
 pub use icmp::{IcmpBackend, IcmpBackendFactory};
 #[cfg(windows)]
