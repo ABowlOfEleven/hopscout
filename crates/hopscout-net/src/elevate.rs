@@ -35,7 +35,9 @@ pub fn spawn_helper_elevated() -> io::Result<()> {
         .map(|p| p.to_path_buf())
         .unwrap_or_default();
     let helper = dir.join("hopscout-helper.exe");
-    runas(&helper.to_string_lossy(), "")
+    // `--serve` tells the helper to actually host the pipe; without it the
+    // helper exits immediately (so running the exe by hand never hangs).
+    runas(&helper.to_string_lossy(), "--serve")
 }
 
 /// Run `exe` with the `runas` verb (triggers UAC). Returns Ok if ShellExecuteW
