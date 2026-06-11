@@ -4,3 +4,4 @@
 # Binary assets must never be line-ending munged.
 *.ico binary
 *.png binary
+*.bin binary
