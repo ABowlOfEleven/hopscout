@@ -3,8 +3,6 @@
 //! Default is the live full-screen view (like `mtr`); `-r`/`--json`/`--csv` give
 //! non-interactive report output, and `--mtu` does a one-shot path-MTU probe.
 
-mod fields;
-mod report;
 mod ui;
 
 use std::io;
@@ -12,7 +10,10 @@ use std::net::{IpAddr, ToSocketAddrs};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use hopscout_core::{BackendFactory, Baseline, Engine, EngineConfig, ProbeProtocol};
+use hopscout_core::{
+    BackendFactory, Baseline, Engine, EngineConfig, Field, ProbeProtocol, ReportParams, fields,
+    report,
+};
 use hopscout_net::{BackendError, make_factory, path_mtu, relaunch_elevated};
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind};
 
@@ -49,7 +50,7 @@ pub struct Args {
     show_ips: bool,
     wide: bool,
     mpls: bool,
-    fields: Vec<fields::Field>,
+    fields: Vec<Field>,
 }
 
 fn main() -> io::Result<()> {
@@ -101,7 +102,7 @@ fn main() -> io::Result<()> {
     let enricher = hopscout_enrich::spawn_with(engine.session(), !args.no_dns);
 
     let result = match args.mode {
-        Mode::Interactive => run_tui(&engine, &args.target, &config, args.mpls, &args.fields),
+        Mode::Interactive => run_tui(&engine, &config, &args),
         Mode::Report | Mode::Json | Mode::Csv => run_report(&engine, &args, &config),
         Mode::Mtu => Ok(()),
     };
@@ -112,15 +113,9 @@ fn main() -> io::Result<()> {
 }
 
 /// The interactive full-screen view.
-fn run_tui(
-    engine: &Engine,
-    target_label: &str,
-    config: &EngineConfig,
-    show_mpls: bool,
-    fields: &[fields::Field],
-) -> io::Result<()> {
+fn run_tui(engine: &Engine, config: &EngineConfig, args: &Args) -> io::Result<()> {
     let mut terminal = ratatui::init();
-    let out = tui_loop(&mut terminal, engine, target_label, config, show_mpls, fields);
+    let out = tui_loop(&mut terminal, engine, config, args);
     ratatui::restore();
     out
 }
@@ -128,29 +123,34 @@ fn run_tui(
 fn tui_loop(
     terminal: &mut ratatui::DefaultTerminal,
     engine: &Engine,
-    target_label: &str,
     config: &EngineConfig,
-    show_mpls: bool,
-    fields: &[fields::Field],
+    args: &Args,
 ) -> io::Result<()> {
     let mut baseline: Option<Baseline> = None;
+    let mut show_alerts = false;
     loop {
         let snapshot = engine.snapshot();
         let alerts = baseline
             .as_ref()
             .map(|b| b.deviations(&snapshot, 1.5))
             .unwrap_or_default();
+        let opts = ui::DisplayOpts {
+            show_mpls: args.mpls,
+            show_ips: args.show_ips,
+            no_dns: args.no_dns,
+            show_alerts,
+            fields: &args.fields,
+        };
         terminal.draw(|frame| {
             ui::draw(
                 frame,
                 &snapshot,
                 engine,
-                target_label,
+                &args.target,
                 config,
                 baseline.is_some(),
                 &alerts,
-                show_mpls,
-                fields,
+                &opts,
             )
         })?;
 
@@ -164,6 +164,7 @@ fn tui_loop(
                     KeyCode::Char('p') | KeyCode::Char(' ') => engine.toggle_pause(),
                     KeyCode::Char('r') => engine.reset(),
                     KeyCode::Char('b') => baseline = Some(Baseline::capture(&snapshot)),
+                    KeyCode::Char('a') => show_alerts = !show_alerts,
                     _ => {}
                 }
             }
@@ -178,15 +179,27 @@ fn run_report(engine: &Engine, args: &Args, config: &EngineConfig) -> io::Result
         + per_cycle.saturating_mul(args.cycles.saturating_add(4))
         + Duration::from_secs(3);
 
+    let params = ReportParams {
+        target: args.target.clone(),
+        first_ttl: config.first_ttl,
+        psize: args.psize,
+        cycles: args.cycles,
+        wide: args.wide,
+        no_dns: args.no_dns,
+        show_ips: args.show_ips,
+        mpls: args.mpls,
+        fields: args.fields.clone(),
+    };
+
     loop {
         let snap = engine.snapshot();
         let ready = snap.path_len.is_some()
             && report::min_samples(&snap, config.first_ttl) >= args.cycles as u64;
         if ready || Instant::now() >= deadline {
             match args.mode {
-                Mode::Json => print!("{}", report::json(&snap, args, config)),
-                Mode::Csv => print!("{}", report::csv(&snap, args, config)),
-                _ => print!("{}", report::text(&snap, args, config)),
+                Mode::Json => print!("{}", report::json(&snap, &params)),
+                Mode::Csv => print!("{}", report::csv(&snap, &params)),
+                _ => print!("{}", report::text(&snap, &params)),
             }
             return Ok(());
         }
@@ -374,7 +387,7 @@ fn usage() {
          \x20   -v, --version          print version\n\
          \x20   -h, --help             show this help\n\
          \n\
-         KEYS (interactive):  q quit  p pause  r reset  b baseline"
+         KEYS (interactive):  q quit  p pause  r reset  b baseline  a alerts"
     );
 }
 

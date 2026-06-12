@@ -11,7 +11,9 @@ pub mod backend;
 pub mod brand;
 pub mod caps;
 pub mod engine;
+pub mod fields;
 pub mod model;
+pub mod report;
 pub mod session;
 pub mod stats;
 
@@ -19,6 +21,8 @@ pub use alert::{Alert, Baseline};
 pub use backend::{BackendFactory, ProbeBackend};
 pub use caps::Capabilities;
 pub use engine::{Engine, EngineConfig};
+pub use fields::Field;
 pub use model::{MplsLabel, ProbeOutcome, ProbeProtocol, ProbeRequest, ProbeResponse};
+pub use report::ReportParams;
 pub use session::{Hop, HopMeta, Session};
 pub use stats::HopStat;

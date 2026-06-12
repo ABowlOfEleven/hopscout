@@ -18,7 +18,9 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use hopscout_core::{Alert, Baseline, Engine, EngineConfig, ProbeProtocol, Session, brand};
+use hopscout_core::{
+    Alert, Baseline, Engine, EngineConfig, ProbeProtocol, ReportParams, Session, brand,
+};
 use hopscout_enrich::EnricherHandle;
 use hopscout_net::{BackendError, make_factory, path_mtu, relaunch_elevated};
 
@@ -71,13 +73,35 @@ enum View {
     Alerts,
 }
 
+/// Address family preference, mirroring the CLI's `-4`/`-6`.
+#[derive(Clone, Copy, PartialEq)]
+enum Family {
+    Auto,
+    V4,
+    V6,
+}
+
+/// Report formats the Export menu can write.
+#[derive(Clone, Copy)]
+enum ExportFmt {
+    Text,
+    Json,
+    Csv,
+}
+
 struct HopscoutApp {
     target_input: String,
     interval_ms: u64,
+    timeout_ms: u64,
     max_hops: u8,
+    first_ttl: u8,
+    psize: usize,
     proto: ProbeProtocol,
     port: u16,
     flows: u8,
+    family: Family,
+    no_dns: bool,
+    show_ips: bool,
     view: View,
     map_view: map::MapView,
     themes: Vec<Theme>,
@@ -88,6 +112,7 @@ struct HopscoutApp {
     error: Option<String>,
     needs_elevation: bool,
     show_about: bool,
+    export_status: Option<String>,
 }
 
 impl HopscoutApp {
@@ -95,10 +120,16 @@ impl HopscoutApp {
         let mut app = Self {
             target_input: arg_target.clone().unwrap_or_default(),
             interval_ms: 1000,
+            timeout_ms: 1000,
             max_hops: 30,
+            first_ttl: 1,
+            psize: 32,
             proto: ProbeProtocol::Icmp,
             port: 443,
             flows: 1,
+            family: Family::Auto,
+            no_dns: false,
+            show_ips: false,
             view: View::Table,
             map_view: map::MapView::default(),
             themes: theme::all(),
@@ -109,6 +140,7 @@ impl HopscoutApp {
             error: None,
             needs_elevation: false,
             show_about: false,
+            export_status: None,
         };
         if arg_target.is_some() {
             app.add_target();
@@ -120,9 +152,9 @@ impl HopscoutApp {
     fn add_target(&mut self) {
         self.error = None;
         self.needs_elevation = false;
-        let Some(dest) = resolve(self.target_input.trim()) else {
+        let Some(dest) = resolve(self.target_input.trim(), self.family) else {
             self.error = Some(format!(
-                "could not resolve an address for '{}'",
+                "could not resolve a matching address for '{}'",
                 self.target_input.trim()
             ));
             return;
@@ -130,7 +162,10 @@ impl HopscoutApp {
 
         let mut config = EngineConfig::new(dest);
         config.interval = Duration::from_millis(self.interval_ms.max(1));
+        config.timeout = Duration::from_millis(self.timeout_ms.max(50));
         config.max_hops = self.max_hops.max(1);
+        config.first_ttl = self.first_ttl.clamp(1, config.max_hops);
+        config.payload_size = self.psize;
         config.protocol = self.proto;
         config.flows = self.flows.max(1);
 
@@ -149,7 +184,7 @@ impl HopscoutApp {
 
         match Engine::start(config.clone(), factory) {
             Ok(engine) => {
-                let enricher = hopscout_enrich::spawn(engine.session());
+                let enricher = hopscout_enrich::spawn_with(engine.session(), !self.no_dns);
 
                 // Probe the path MTU in the background.
                 let mtu: MtuSlot = Arc::new(Mutex::new(None));
@@ -188,6 +223,52 @@ impl HopscoutApp {
         } else {
             Some(self.active.unwrap_or(0).min(self.monitors.len() - 1))
         };
+    }
+
+    /// Write the active monitor's current report (text/JSON/CSV) to the user's
+    /// Downloads folder, using the same generators as the CLI's `-r`/`-j`/`-C`.
+    fn export(&mut self, fmt: ExportFmt) {
+        let Some(active) = self.active else {
+            self.export_status = Some("No active target to export.".to_string());
+            return;
+        };
+        // Build everything from the monitor inside a scope so its borrow ends
+        // before we write back to self.export_status.
+        let (body, ext, safe) = {
+            let mon = &self.monitors[active];
+            let snap = mon.engine.snapshot();
+            let label = mon.label.clone();
+            let params = ReportParams {
+                target: label.clone(),
+                first_ttl: mon.config.first_ttl,
+                psize: mon.config.payload_size,
+                cycles: 0,
+                wide: true,
+                no_dns: self.no_dns,
+                show_ips: self.show_ips,
+                mpls: true,
+                fields: hopscout_core::fields::default(),
+            };
+            let (body, ext) = match fmt {
+                ExportFmt::Text => (hopscout_core::report::text(&snap, &params), "txt"),
+                ExportFmt::Json => (hopscout_core::report::json(&snap, &params), "json"),
+                ExportFmt::Csv => (hopscout_core::report::csv(&snap, &params), "csv"),
+            };
+            let safe: String = label
+                .chars()
+                .map(|c| if c.is_ascii_alphanumeric() || c == '.' || c == '-' { c } else { '_' })
+                .collect();
+            (body, ext, safe)
+        };
+
+        let dir = directories::UserDirs::new()
+            .and_then(|u| u.download_dir().map(|p| p.to_path_buf()))
+            .unwrap_or_else(std::env::temp_dir);
+        let path = dir.join(format!("hopscout-{safe}.{ext}"));
+        self.export_status = Some(match std::fs::write(&path, body) {
+            Ok(()) => format!("Saved {}", path.display()),
+            Err(e) => format!("Export failed: {e}"),
+        });
     }
 }
 
@@ -228,6 +309,17 @@ impl HopscoutApp {
                 );
                 let enter = edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
 
+                egui::ComboBox::from_id_salt("family")
+                    .selected_text(family_label(self.family))
+                    .width(64.0)
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.family, Family::Auto, "Auto");
+                        ui.selectable_value(&mut self.family, Family::V4, "IPv4");
+                        ui.selectable_value(&mut self.family, Family::V6, "IPv6");
+                    })
+                    .response
+                    .on_hover_text("address family (Auto prefers IPv4)");
+
                 egui::ComboBox::from_id_salt("proto")
                     .selected_text(proto_label(self.proto))
                     .show_ui(ui, |ui| {
@@ -242,10 +334,18 @@ impl HopscoutApp {
                 }
                 ui.add(egui::DragValue::new(&mut self.interval_ms).suffix(" ms").range(1..=60_000))
                     .on_hover_text("interval between probes");
+                ui.add(egui::DragValue::new(&mut self.timeout_ms).prefix("⏱ ").suffix(" ms").range(50..=60_000))
+                    .on_hover_text("per-probe timeout");
                 ui.add(egui::DragValue::new(&mut self.max_hops).prefix("hops ").range(1..=64))
                     .on_hover_text("max TTL");
+                ui.add(egui::DragValue::new(&mut self.first_ttl).prefix("from ").range(1..=64))
+                    .on_hover_text("first TTL (start hop)");
+                ui.add(egui::DragValue::new(&mut self.psize).prefix("size ").range(0..=65500))
+                    .on_hover_text("payload bytes");
                 ui.add(egui::DragValue::new(&mut self.flows).prefix("flows ").range(1..=8))
                     .on_hover_text("concurrent flows for multipath discovery");
+                ui.checkbox(&mut self.no_dns, "no DNS").on_hover_text("don't resolve host names");
+                ui.checkbox(&mut self.show_ips, "IPs").on_hover_text("show IPs alongside names");
 
                 if ui.button("Add target").clicked() || enter {
                     self.add_target();
@@ -272,6 +372,24 @@ impl HopscoutApp {
                 ui.selectable_value(&mut self.view, View::Alerts, "Alerts");
 
                 ui.separator();
+                ui.menu_button("Export", |ui| {
+                    if ui.button("Text report (.txt)").clicked() {
+                        self.export(ExportFmt::Text);
+                        ui.close();
+                    }
+                    if ui.button("JSON (.json)").clicked() {
+                        self.export(ExportFmt::Json);
+                        ui.close();
+                    }
+                    if ui.button("CSV (.csv)").clicked() {
+                        self.export(ExportFmt::Csv);
+                        ui.close();
+                    }
+                })
+                .response
+                .on_hover_text("Save the active target's report to your Downloads folder");
+
+                ui.separator();
                 let cur = self.themes.get(self.theme_idx).map(|t| t.name.as_str()).unwrap_or("Theme");
                 egui::ComboBox::from_id_salt("theme")
                     .selected_text(cur)
@@ -290,6 +408,10 @@ impl HopscoutApp {
                 }
                 if ui.button("About").clicked() {
                     self.show_about = true;
+                }
+                if let Some(s) = self.export_status.clone() {
+                    ui.separator();
+                    ui.weak(s.clone()).on_hover_text(s);
                 }
             });
             ui.add_space(4.0);
@@ -379,8 +501,10 @@ impl HopscoutApp {
 
             match self.view {
                 View::Table => {
+                    let show_ips = self.show_ips;
+                    let no_dns = self.no_dns;
                     let selected = &mut self.monitors[active].selected;
-                    table::show(ui, &snapshot, selected, &theme);
+                    table::show(ui, &snapshot, selected, &theme, show_ips, no_dns);
                     ui.separator();
                     sparkline::panel(ui, &snapshot, *selected);
                 }
@@ -490,15 +614,34 @@ fn proto_label(p: ProbeProtocol) -> &'static str {
     }
 }
 
-/// Resolve a host or literal to an address (prefers IPv4, falls back to IPv6).
-fn resolve(target: &str) -> Option<IpAddr> {
+fn family_label(f: Family) -> &'static str {
+    match f {
+        Family::Auto => "Auto",
+        Family::V4 => "IPv4",
+        Family::V6 => "IPv6",
+    }
+}
+
+/// Resolve a host or literal to an address, honoring the family preference
+/// (Auto prefers IPv4 then falls back to IPv6).
+fn resolve(target: &str, family: Family) -> Option<IpAddr> {
     if target.is_empty() {
         return None;
     }
+    let matches = |a: &IpAddr| match family {
+        Family::Auto => true,
+        Family::V4 => a.is_ipv4(),
+        Family::V6 => a.is_ipv6(),
+    };
     if let Ok(ip) = target.parse::<IpAddr>() {
-        return Some(ip);
+        return matches(&ip).then_some(ip);
     }
-    let mut addrs: Vec<IpAddr> = (target, 0u16).to_socket_addrs().ok()?.map(|s| s.ip()).collect();
+    let mut addrs: Vec<IpAddr> = (target, 0u16)
+        .to_socket_addrs()
+        .ok()?
+        .map(|s| s.ip())
+        .filter(matches)
+        .collect();
     addrs.sort_by_key(|a| a.is_ipv6());
     addrs.into_iter().next()
 }

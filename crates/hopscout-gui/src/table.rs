@@ -2,15 +2,22 @@
 //! row's hop number selects it for the sparkline panel below.
 
 use egui_extras::{Column, TableBuilder};
-use hopscout_core::Session;
+use hopscout_core::{Hop, Session};
 
 use crate::theme::Theme;
 
-const HEADERS: [&str; 11] = [
-    "Hop", "Host", "ASN", "Loss%", "Snt", "Last", "Avg", "Best", "Wrst", "Jitter", "p95",
+const HEADERS: [&str; 12] = [
+    "Hop", "Host", "ASN", "Loc", "Loss%", "Snt", "Last", "Avg", "Best", "Wrst", "Jitter", "p95",
 ];
 
-pub fn show(ui: &mut egui::Ui, session: &Session, selected: &mut Option<usize>, theme: &Theme) {
+pub fn show(
+    ui: &mut egui::Ui,
+    session: &Session,
+    selected: &mut Option<usize>,
+    theme: &Theme,
+    show_ips: bool,
+    no_dns: bool,
+) {
     let n = session.visible_hops();
 
     TableBuilder::new(ui)
@@ -19,6 +26,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session, selected: &mut Option<usize>, 
         .column(Column::auto()) // hop
         .column(Column::initial(220.0).at_least(120.0).clip(true)) // host
         .column(Column::auto()) // asn
+        .column(Column::initial(120.0).at_least(60.0).clip(true)) // loc
         .column(Column::auto()) // loss
         .column(Column::auto()) // sent
         .column(Column::auto()) // last
@@ -47,17 +55,17 @@ pub fn show(ui: &mut egui::Ui, session: &Session, selected: &mut Option<usize>, 
                     }
                 });
                 row.col(|ui| {
-                    let host = hop
-                        .meta
-                        .hostname
-                        .clone()
-                        .or_else(|| hop.primary_addr().map(|a| a.to_string()))
-                        .unwrap_or_else(|| "*".to_string());
-                    ui.label(host);
+                    ui.label(host_label(hop, show_ips, no_dns));
                 });
                 row.col(|ui| {
                     if let Some(asn) = hop.meta.asn {
                         ui.colored_label(theme.accent2, format!("AS{asn}"));
+                    }
+                });
+                row.col(|ui| {
+                    let loc = geo_label(hop);
+                    if !loc.is_empty() {
+                        ui.weak(loc);
                     }
                 });
 
@@ -89,6 +97,33 @@ pub fn show(ui: &mut egui::Ui, session: &Session, selected: &mut Option<usize>, 
                 });
             });
         });
+}
+
+/// The host cell: name, `name (ip)`, or bare IP, with an MPLS suffix when the
+/// hop carries labels (udp/tcp modes).
+fn host_label(hop: &Hop, show_ips: bool, no_dns: bool) -> String {
+    let ip = hop.primary_addr().map(|a| a.to_string());
+    let name = if no_dns { None } else { hop.meta.hostname.clone() };
+    let mut host = match (name, ip) {
+        (Some(n), Some(ip)) if show_ips => format!("{n} ({ip})"),
+        (Some(n), _) => n,
+        (None, Some(ip)) => ip,
+        (None, None) => "*".to_string(),
+    };
+    if !hop.mpls.is_empty() {
+        let labels: Vec<String> = hop.mpls.iter().map(|m| m.label.to_string()).collect();
+        host = format!("{host} [MPLS {}]", labels.join(","));
+    }
+    host
+}
+
+/// Compact location: city, else country, else blank.
+fn geo_label(hop: &Hop) -> String {
+    match (&hop.meta.city, &hop.meta.country) {
+        (Some(c), _) if !c.is_empty() => c.clone(),
+        (_, Some(c)) if !c.is_empty() => c.clone(),
+        _ => String::new(),
+    }
 }
 
 fn fmt_ms(v: Option<f64>) -> String {
