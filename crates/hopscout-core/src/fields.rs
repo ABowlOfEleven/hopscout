@@ -1,8 +1,8 @@
-//! MTR-style stat-field selection for the CLI columns (`-o`/`--order`).
-//! Letters: L loss, S sent, R recv, D drop, N last, A avg, B best, W worst,
-//! V stddev, P p95.
+//! MTR-style stat-field selection for the table columns and text report
+//! (`-o`/`--order` on the CLI). Letters: L loss, S sent, R recv, D drop,
+//! N last, A avg, B best, W worst, V stddev, P p95.
 
-use hopscout_core::HopStat;
+use crate::HopStat;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Field {
@@ -79,7 +79,7 @@ impl Field {
     }
 }
 
-/// The default column set (matches the previous fixed layout).
+/// The default column set (matches the original fixed layout).
 pub fn default() -> Vec<Field> {
     use Field::*;
     vec![Loss, Snt, Last, Avg, Best, Wrst, StDev, P95]
