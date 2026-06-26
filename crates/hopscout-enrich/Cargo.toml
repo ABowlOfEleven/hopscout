@@ -9,7 +9,7 @@ rust-version.workspace = true
 description = "Background hop enrichment for hopscout: reverse DNS + origin ASN (Team Cymru)"
 
 [dependencies]
-hopscout-core = { version = "0.1.0", path = "../hopscout-core" }
+hopscout-core = { version = "0.1.1", path = "../hopscout-core" }
 dns-lookup = "2.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"

@@ -1777,7 +1777,7 @@ checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 
 [[package]]
 name = "hopscout-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hopscout-core",
  "hopscout-enrich",
@@ -1788,14 +1788,14 @@ dependencies = [
 
 [[package]]
 name = "hopscout-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "hopscout-enrich"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "dns-lookup",
  "hopscout-core",
@@ -1805,7 +1805,7 @@ dependencies = [
 
 [[package]]
 name = "hopscout-gui"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "directories",
  "eframe",
@@ -1821,14 +1821,14 @@ dependencies = [
 
 [[package]]
 name = "hopscout-helper"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hopscout-net",
 ]
 
 [[package]]
 name = "hopscout-net"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hopscout-core",
  "hopscout-enrich",

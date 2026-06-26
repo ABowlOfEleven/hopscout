@@ -9,7 +9,7 @@
   <Package
       Name="hopscout"
       Manufacturer="hopscout contributors"
-      Version="0.1.0.0"
+      Version="0.1.1.0"
       UpgradeCode="B6E2F0A1-7C43-4D58-9E10-2A6B5C8D4F31"
       Scope="perUser"
       Compressed="yes">

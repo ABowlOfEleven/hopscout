@@ -5,6 +5,22 @@ All notable changes are recorded here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.1]
+
+CLI and GUI feature parity.
+
+- Shared rendering: the text / JSON / CSV report generators and the MTR-style
+  stat columns moved into `hopscout-core`, so the CLI and GUI render the same
+  way from the same code.
+- GUI gained the engine controls the CLI already exposed: IPv4 / IPv6 family,
+  payload size, per-probe timeout, first TTL, and a no-DNS toggle, plus a
+  show-IPs toggle, a Location (city / country) column, inline MPLS labels, and
+  an Export menu that saves text / JSON / CSV reports.
+- CLI gained a Location column and a dedicated alerts view (toggle `a`); the
+  `-b` / show-IPs flag is now wired into the live table.
+- Reports now carry geolocation: CSV gains City / Country columns and JSON adds
+  asn / city / country per hop.
+
 ## [0.1.0]
 
 First release.

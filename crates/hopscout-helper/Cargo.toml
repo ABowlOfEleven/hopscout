@@ -13,7 +13,7 @@ name = "hopscout-helper"
 path = "src/main.rs"
 
 [dependencies]
-hopscout-net = { version = "0.1.0", path = "../hopscout-net" }
+hopscout-net = { version = "0.1.1", path = "../hopscout-net" }
 
 [lints]
 workspace = true
