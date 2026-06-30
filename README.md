@@ -1,6 +1,7 @@
 # hopscout
 
 [![CI](https://github.com/ABowlOfEleven/hopscout/actions/workflows/ci.yml/badge.svg)](https://github.com/ABowlOfEleven/hopscout/actions/workflows/ci.yml)
+[![winget](https://img.shields.io/winget/v/ABowlOfEleven.hopscout)](https://github.com/microsoft/winget-pkgs/tree/master/manifests/a/ABowlOfEleven/hopscout)
 
 A modern traceroute + continuous-monitoring tool for Windows - native, no
 elevation required for the default path - with a `ratatui` CLI and an `egui`
@@ -18,12 +19,19 @@ alerting, multi-target dashboards, and multipath (Paris) discovery.
 
 ## Install
 
+- **winget (recommended):**
+
+  ```
+  winget install ABowlOfEleven.hopscout
+  ```
+
+  Per-user (no admin to install); adds `hopscout` to your PATH and a Start Menu
+  entry for the GUI. Already installed? `winget upgrade ABowlOfEleven.hopscout`.
 - **Installer (MSI):** download `hopscout-<version>-x64.msi` from
-  [Releases](https://github.com/ABowlOfEleven/hopscout/releases). Per-user (no
-  admin to install); adds `hopscout` to your PATH and a Start Menu entry for the GUI.
+  [Releases](https://github.com/ABowlOfEleven/hopscout/releases) and run it. Same
+  per-user install if you would rather grab it directly.
 - **Portable:** `hopscout-<version>-x64-portable.zip` contains all three exes
   (`hopscout.exe`, `hopscout-gui.exe`, `hopscout-helper.exe`); unzip and run.
-- **winget:** `winget install ABowlOfEleven.hopscout` (once the manifest is published).
 - **From source:** Rust 1.85+ on Windows, then `cargo build --release` and
   `cargo run -p hopscout-cli -- 8.8.8.8`.
 
